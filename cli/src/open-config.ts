@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import net from "node:net";
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 
 const START_PORT = 3000;
 const END_PORT = 3999;
@@ -11,10 +11,25 @@ const BOOT_POLL_MS = 500;
 export async function openConfigUi(): Promise<void> {
   const port = await findAvailablePort(START_PORT, END_PORT);
   const url = `http://localhost:${port}/`;
+  const webServer = startWebServer(port);
+  const cleanupSignalHandlers = setupSignalHandlers(webServer);
 
-  startWebServer(port);
-  await waitUntilReachable(url, BOOT_TIMEOUT_MS, BOOT_POLL_MS);
-  await openInBrowser(url);
+  try {
+    await waitUntilReachable(url, BOOT_TIMEOUT_MS, BOOT_POLL_MS, webServer);
+    await openInBrowser(url);
+    console.log(`設定UIを起動しました: ${url}`);
+    console.log("終了するには Ctrl-C を押してください");
+
+    const exitCode = await waitForProcessExit(webServer);
+    if ((exitCode ?? 0) !== 0) {
+      throw new Error(`設定UIサーバーが終了しました (exit code: ${exitCode ?? "null"})`);
+    }
+  } catch (error) {
+    await terminateWebServer(webServer, "SIGTERM");
+    throw error;
+  } finally {
+    cleanupSignalHandlers();
+  }
 }
 
 async function findAvailablePort(start: number, end: number): Promise<number> {
@@ -43,29 +58,37 @@ function isPortAvailable(port: number): Promise<boolean> {
   });
 }
 
-function startWebServer(port: number): void {
+function startWebServer(port: number): ChildProcess {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   const projectRoot = path.resolve(moduleDir, "..", "..");
   const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
   const baseDir = process.cwd();
+  const detached = process.platform !== "win32";
 
-  const child = spawn(npmCommand, ["run", "-w", "web", "dev", "--", "--port", String(port)], {
+  return spawn(npmCommand, ["run", "-w", "web", "dev", "--", "--port", String(port)], {
     cwd: projectRoot,
     env: {
       ...process.env,
       SWISS_BASE_DIR: baseDir,
     },
-    detached: true,
-    stdio: "ignore",
+    detached,
+    stdio: "inherit",
   });
-
-  child.unref();
 }
 
-async function waitUntilReachable(url: string, timeoutMs: number, intervalMs: number): Promise<void> {
+async function waitUntilReachable(
+  url: string,
+  timeoutMs: number,
+  intervalMs: number,
+  webServer: ChildProcess,
+): Promise<void> {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < timeoutMs) {
+    if (webServer.exitCode !== null) {
+      throw new Error(`設定UIサーバーが終了しました (exit code: ${webServer.exitCode})`);
+    }
+
     // eslint-disable-next-line no-await-in-loop
     if (await isHttpReachable(url)) {
       return;
@@ -75,6 +98,91 @@ async function waitUntilReachable(url: string, timeoutMs: number, intervalMs: nu
   }
 
   throw new Error(`設定UIの起動を確認できませんでした: ${url}`);
+}
+
+function setupSignalHandlers(webServer: ChildProcess): () => void {
+  let isShuttingDown = false;
+  const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
+
+  const handlers = signals.map((signal) => {
+    const handler = () => {
+      if (isShuttingDown) {
+        return;
+      }
+      isShuttingDown = true;
+
+      void (async () => {
+        console.log("\n設定UIサーバーを停止しています...");
+        await terminateWebServer(webServer, signal);
+        process.exit(signal === "SIGINT" ? 130 : 143);
+      })();
+    };
+
+    process.on(signal, handler);
+    return { signal, handler };
+  });
+
+  return () => {
+    for (const { signal, handler } of handlers) {
+      process.off(signal, handler);
+    }
+  };
+}
+
+async function terminateWebServer(webServer: ChildProcess, signal: NodeJS.Signals): Promise<void> {
+  if (webServer.exitCode !== null) {
+    return;
+  }
+
+  const exitPromise = waitForProcessExit(webServer);
+
+  sendSignal(webServer, signal);
+  if (await waitForExitWithTimeout(exitPromise, 5_000)) {
+    return;
+  }
+
+  sendSignal(webServer, "SIGKILL");
+  await waitForExitWithTimeout(exitPromise, 2_000);
+}
+
+function sendSignal(webServer: ChildProcess, signal: NodeJS.Signals): void {
+  if (webServer.exitCode !== null) {
+    return;
+  }
+
+  try {
+    if (process.platform !== "win32" && webServer.pid) {
+      process.kill(-webServer.pid, signal);
+      return;
+    }
+
+    webServer.kill(signal);
+  } catch {
+    // すでに終了している場合は無視
+  }
+}
+
+function waitForProcessExit(webServer: ChildProcess): Promise<number | null> {
+  if (webServer.exitCode !== null) {
+    return Promise.resolve(webServer.exitCode);
+  }
+
+  return new Promise((resolve, reject) => {
+    webServer.once("error", (error) => {
+      reject(error);
+    });
+
+    webServer.once("exit", (code) => {
+      resolve(code);
+    });
+  });
+}
+
+async function waitForExitWithTimeout(exitPromise: Promise<number | null>, timeoutMs: number): Promise<boolean> {
+  return Promise.race([
+    exitPromise.then(() => true, () => true),
+    sleep(timeoutMs).then(() => false),
+  ]);
 }
 
 async function isHttpReachable(url: string): Promise<boolean> {

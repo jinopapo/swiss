@@ -1,6 +1,6 @@
 # swiss
-AIにレビューをさせるためのcli
-異なる観点のレビューをワークフロー的に実行する
+AIにレビューをさせるための CLI。
+異なる観点のレビューをワークフローとして順に実行します。
 
 ## 前提
 - Node.js 20+
@@ -21,41 +21,43 @@ npm run build
 npm install -g .
 ```
 
-`nodenv` を使っている場合は、必要に応じて `nodenv rehash` を実行してください。
+補足:
+- `swiss` の実行ファイル（`cli/dist/index.js`）には、ビルド時に自動で実行権限が付与されます。
+- `nodenv` を使っている場合は、必要に応じて `nodenv rehash` を実行してください。
 
-ローカル実行（ビルドなし）:
-```bash
-npm run dev -- review --text
-```
+開発/ローカル実行の方法は `doc/dev.md` を参照してください。
 
 ## 使い方
 ### レビュー 
-```
+```bash
 cat doc.md | swiss review --text
 git diff | swiss review --diff
 ```
 
 ### レビュー実行仕様
-- `.swiss/swiss.yaml` の `reviews` を**上から順番に逐次実行**
-- 各レビューは `.swiss/prompts/{review_name}.md` を使って実行
-- AI出力は Structured Output（JSON Schema）で以下を取得
-  - `review`: レビュー本文
-  - `score`: 0-100 の整数
-- `score >= 80` を **要対応** と判定し、その時点で処理を停止して結果を標準出力
+- `.swiss/swiss.yaml` の `reviews` を**上から順番に逐次実行**します
+- 各レビューは `.swiss/prompts/{review_name}.md` の内容（レビュー観点）を使って実行します
+- AI出力は Structured Output（JSON Schema）で受け取り、結果のうち **`score > 80`** のものだけを「要対応」として出力します
+- 1件でも要対応が出た時点で終了し、終了コード `2` になります
 
 ### 設定
-web uiでワークフローとプロンプトの作成、更新ができます
-```
+Web UI でワークフローとプロンプトの作成/更新ができます。
+
+```bash
 swiss config
 ```
 
-webを起動する場合:
-```
+`swiss config` は Next.js の設定UIサーバーを起動したまま待機します。
+終了するときはターミナルで `Ctrl-C` を押してください（サーバーも一緒に停止します）。
+
+開発中に Web を直接起動する場合:
+
+```bash
 npm run web
 ```
 
 ### 補完
-```
+```bash
 swiss completion fish > ~/.config/fish/completions/swiss.fish
 ```
 

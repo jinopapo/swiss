@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 type ReviewConfig = {
+  uid: string;
   name: string;
   description: string;
   model: string;
@@ -23,7 +24,13 @@ const MODEL_OPTIONS = [
   "gpt-5.1-codex-mini",
 ];
 
+const createReviewId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
 const emptyReview = (): ReviewConfig => ({
+  uid: createReviewId(),
   name: "",
   description: "",
   model: "",
@@ -62,6 +69,7 @@ export function ConfigEditor() {
         setConfig({
           model: loadedConfig.model ?? "",
           reviews: (loadedConfig.reviews ?? []).map((review) => ({
+            uid: createReviewId(),
             name: review.name ?? "",
             description: review.description ?? "",
             model: review.model ?? "",
@@ -102,10 +110,14 @@ export function ConfigEditor() {
     }
     setSaving(true);
     setMessage(null);
+    const configToSave = {
+      model: config.model,
+      reviews: config.reviews.map(({ uid: _uid, ...review }) => review),
+    };
     const res = await fetch("/api/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ config }),
+      body: JSON.stringify({ config: configToSave }),
     });
     if (res.ok) {
       await Promise.all(
@@ -156,7 +168,11 @@ export function ConfigEditor() {
     }));
   };
 
-  const updateReviewName = (index: number, nextName: string) => {
+  const updateReviewName = (
+    index: number,
+    currentName: string,
+    nextName: string
+  ) => {
     setConfig((prev) => {
       const current = prev.reviews[index];
       if (!current) return prev;
@@ -168,7 +184,6 @@ export function ConfigEditor() {
       };
     });
     setPrompts((prev) => {
-      const currentName = config.reviews[index]?.name ?? "";
       if (!currentName || currentName === nextName) return prev;
       if (prev[nextName]) return prev;
       return { ...prev, [nextName]: prev[currentName] ?? "" };
@@ -248,7 +263,7 @@ export function ConfigEditor() {
             <div className="space-y-4">
               {config.reviews.map((review, index) => (
                 <div
-                  key={`${review.name}-${index}`}
+                  key={review.uid}
                   className="rounded-xl border border-slate-800 bg-slate-950 p-4"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -300,7 +315,7 @@ export function ConfigEditor() {
                         placeholder="review-1"
                         value={review.name}
                         onChange={(event) =>
-                          updateReviewName(index, event.target.value)
+                          updateReviewName(index, review.name, event.target.value)
                         }
                       />
                     </div>
