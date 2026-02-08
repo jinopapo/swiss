@@ -16,6 +16,13 @@ npm install
 npm run build
 ```
 
+グローバルインストール:
+```bash
+npm install -g .
+```
+
+`nodenv` を使っている場合は、必要に応じて `nodenv rehash` を実行してください。
+
 ローカル実行（ビルドなし）:
 ```bash
 npm run dev -- review --text

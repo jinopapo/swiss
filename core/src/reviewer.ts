@@ -128,16 +128,13 @@ function buildMessage(args: {
   review: ReviewSpec;
   input: ReviewInput;
 }): string {
-  const header = [`# ${args.review.name}`, args.review.description]
-    .filter(Boolean)
-    .join("\n");
   return [
-    header,
-    `入力種別: ${args.input.kind}`,
-    args.input.content,
-    "\n---\n",
     args.builtInPrompt,
+    "\n```\n",
+    args.input.content,
+    "\n```\n",
     "\n---\n",
+    "# レビュー観点",
     args.userPrompt,
   ]
     .filter(Boolean)

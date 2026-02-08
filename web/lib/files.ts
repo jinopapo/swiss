@@ -1,14 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-const baseDir = process.cwd();
+const baseDir = process.env.SWISS_BASE_DIR ?? process.cwd();
 
 function configPath() {
-  return path.join(baseDir, "..", ".swiss", "swiss.yaml");
+  return path.join(baseDir, ".swiss", "swiss.yaml");
 }
 
 function promptsDir() {
-  return path.join(baseDir, "..", ".swiss", "prompts");
+  return path.join(baseDir, ".swiss", "prompts");
 }
 
 export async function readConfigFile(): Promise<string> {

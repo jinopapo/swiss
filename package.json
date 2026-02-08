@@ -1,12 +1,17 @@
 {
   "name": "swiss",
+  "version": "0.1.0",
   "private": true,
+  "bin": {
+    "swiss": "cli/dist/index.js"
+  },
   "workspaces": [
     "cli",
     "core",
     "web"
   ],
   "scripts": {
+    "prepack": "npm run -w core build && npm run -w cli build",
     "build": "npm run -w core build && npm run -w cli build && npm run -w web build",
     "dev": "npm run -w cli dev --",
     "web": "npm run -w web dev",
