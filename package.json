@@ -1,0 +1,15 @@
+{
+  "name": "swiss",
+  "private": true,
+  "workspaces": [
+    "cli",
+    "core",
+    "web"
+  ],
+  "scripts": {
+    "build": "npm run -w core build && npm run -w cli build && npm run -w web build",
+    "dev": "npm run -w cli dev --",
+    "web": "npm run -w web dev",
+    "lint": "npm run -w cli lint && npm run -w core lint && npm run -w web lint"
+  }
+}

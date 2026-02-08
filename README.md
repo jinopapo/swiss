@@ -42,6 +42,11 @@ web uiでワークフローとプロンプトの作成、更新ができます
 swiss config
 ```
 
+webを起動する場合:
+```
+npm run web
+```
+
 ### 補完
 ```
 swiss completion fish > ~/.config/fish/completions/swiss.fish

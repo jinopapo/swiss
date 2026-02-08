@@ -112,7 +112,7 @@ async function runSingleReview(args: {
   const normalized = Array.isArray(rawParsed) ? { results: rawParsed } : rawParsed;
   const parsed = reviewResultSchema.parse(normalized);
   return parsed.results
-    // .filter((item) => item.score > 80)
+    .filter((item) => item.score > 80)
     .map((item) => ({
       name: args.review.name,
       review: item.review,
