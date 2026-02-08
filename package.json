@@ -15,6 +15,7 @@
     "build": "npm run -w core build && npm run -w cli build && npm run -w web build",
     "dev": "npm run -w cli dev --",
     "web": "npm run -w web dev",
+    "knip": "knip",
     "lint": "npm run -w cli lint && npm run -w core lint && npm run -w web lint",
     "lint:fix": "npm run -w cli lint -- --fix && npm run -w core lint -- --fix && npm run -w web lint -- --fix"
   },
@@ -24,6 +25,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^5.1.0",
     "globals": "^15.14.0",
+    "knip": "^5.83.1",
     "typescript-eslint": "^8.22.0"
   }
 }

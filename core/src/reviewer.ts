@@ -52,7 +52,7 @@ const jsonSchema = {
   additionalProperties: false,
 } as const;
 
-export type ReviewRunnerOptions = {
+type ReviewRunnerOptions = {
   baseDir: string;
   config: SwissConfig;
   input: ReviewInput;

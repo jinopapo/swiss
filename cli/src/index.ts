@@ -21,12 +21,16 @@ program
     const kind = options.diff ? "diff" : "text";
     const content = await readStdin();
     if (!content.trim()) {
+      if (kind === "diff") {
+        console.log("差分がないためレビューをスキップしました");
+        return;
+      }
       console.error("stdin が空です");
       process.exit(1);
     }
 
     const input: ReviewInput = { kind, content };
-    const baseDir = process.cwd();
+    const baseDir = process.env.INIT_CWD ?? process.cwd();
     const config = await loadConfig(baseDir);
     const { results, stopReason } = await runReviews({ baseDir, config, input });
 
