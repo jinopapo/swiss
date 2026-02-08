@@ -15,6 +15,15 @@
     "build": "npm run -w core build && npm run -w cli build && npm run -w web build",
     "dev": "npm run -w cli dev --",
     "web": "npm run -w web dev",
-    "lint": "npm run -w cli lint && npm run -w core lint && npm run -w web lint"
+    "lint": "npm run -w cli lint && npm run -w core lint && npm run -w web lint",
+    "lint:fix": "npm run -w cli lint -- --fix && npm run -w core lint -- --fix && npm run -w web lint -- --fix"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.19.0",
+    "eslint": "^9.19.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "globals": "^15.14.0",
+    "typescript-eslint": "^8.22.0"
   }
 }

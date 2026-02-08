@@ -1,9 +1,1 @@
-import next from "eslint-config-next";
-
-export default [
-  next({
-    next: {
-      rootDir: ["."]
-    }
-  })
-];
+export { default } from "../eslint.config.mjs";

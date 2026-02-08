@@ -34,7 +34,6 @@ export async function openConfigUi(): Promise<void> {
 
 async function findAvailablePort(start: number, end: number): Promise<number> {
   for (let port = start; port <= end; port += 1) {
-    // eslint-disable-next-line no-await-in-loop
     if (await isPortAvailable(port)) {
       return port;
     }
@@ -89,11 +88,9 @@ async function waitUntilReachable(
       throw new Error(`設定UIサーバーが終了しました (exit code: ${webServer.exitCode})`);
     }
 
-    // eslint-disable-next-line no-await-in-loop
     if (await isHttpReachable(url)) {
       return;
     }
-    // eslint-disable-next-line no-await-in-loop
     await sleep(intervalMs);
   }
 

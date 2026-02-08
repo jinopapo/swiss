@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
 import { loadConfig, runReviews } from "@swiss/core";
 import { readStdin } from "./stdin.js";
 import { openConfigUi } from "./open-config.js";

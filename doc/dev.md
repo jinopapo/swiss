@@ -23,6 +23,17 @@ npm install
 npm run build
 ```
 
+### lint
+リポジトリ全体（cli + core + web）で ESLint を実行します。
+```bash
+npm run lint
+```
+
+自動修正できるものを修正する場合:
+```bash
+npm run lint:fix
+```
+
 個別にビルドする場合:
 ```bash
 npm run -w core build

@@ -112,7 +112,12 @@ export function ConfigEditor() {
     setMessage(null);
     const configToSave = {
       model: config.model,
-      reviews: config.reviews.map(({ uid: _uid, ...review }) => review),
+      reviews: config.reviews.map((review) => ({
+        name: review.name,
+        description: review.description,
+        model: review.model,
+        parallel: review.parallel,
+      })),
     };
     const res = await fetch("/api/config", {
       method: "POST",
