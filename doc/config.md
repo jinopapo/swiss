@@ -1,14 +1,22 @@
 # 設定ファイル仕様
 このドキュメントでは、swiss が参照する設定ファイルの仕様を説明します。
 
-- ワークフロー定義: `.swiss/swiss.yaml`
+- ワークフロー定義: `.swiss/flows/{workflow}.yaml`
 - レビュー観点（プロンプト）: `.swiss/prompts/{review_name}.md`
 
 > [!NOTE]
-> `.swiss/swiss.yaml` のスキーマは `core/src/config.ts` の Zod 定義に準拠します。
+> `.swiss/flows/{workflow}.yaml` のスキーマは `core/src/config.ts` の Zod 定義に準拠します。
 
-## .swiss/swiss.yaml
-ワークフロー（レビューの並び）を定義する YAML です。
+## .swiss/flows/{workflow}.yaml
+ワークフロー（レビューの並び）を定義する YAML です。CLI は `swiss review <workflow>` でこのファイルを読み込みます。
+
+### workflow 名の制約
+`{workflow}` には以下のみ使用できます。
+
+- 英字（`a-z`, `A-Z`）
+- 数字（`0-9`）
+- ハイフン（`-`）
+- アンダースコア（`_`）
 
 ### スキーマ
 ```yaml
@@ -17,6 +25,7 @@ reviews:
   - name: <string>
     description: <string?>
     model: <string?>
+    parallel: <boolean?>
 ```
 
 ### model（必須）
@@ -47,16 +56,33 @@ model: gpt-5
 reviews:
   - name: quality
     description: コード品質レビュー
+    parallel: false
   - name: security
     description: セキュリティレビュー
     model: gpt-5
+    parallel: true
 ```
+
+## 設定UI / Web API について
+
+設定UI（`swiss config` / `npm run web`）が利用する Web API の仕様は `doc/api.md` を参照してください。
 
 ## .swiss/prompts/{review_name}.md
 各レビューで使用する「レビュー観点」を定義する Markdown ファイルです。
 
-- ファイル名は `.swiss/swiss.yaml` の `reviews[].name` と一致させます
+- ファイル名は `.swiss/flows/{workflow}.yaml` の `reviews[].name` と一致させます
 - 内容は自由形式ですが、どの観点でレビューさせたいかを具体的に書くのがおすすめです
+
+## ディレクトリ例
+```text
+.swiss/
+  flows/
+    default.yaml
+    security.yaml
+  prompts/
+    quality.md
+    security.md
+```
 
 ### 例
 ```md

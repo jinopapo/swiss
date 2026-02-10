@@ -7,7 +7,7 @@ export default function Home() {
         <header className="space-y-2">
           <h1 className="text-3xl font-semibold">swiss 設定</h1>
           <p className="text-sm text-slate-300">
-            .swiss/swiss.yaml と .swiss/prompts を編集できます。
+            .swiss/flows と .swiss/prompts を編集できます。
           </p>
         </header>
         <ConfigEditor />

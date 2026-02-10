@@ -23,6 +23,7 @@ const MODEL_OPTIONS = [
   "gpt-5.2-codex",
   "gpt-5.1-codex-mini",
 ];
+const WORKFLOW_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 const createReviewId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -37,13 +38,20 @@ const emptyReview = (): ReviewConfig => ({
   parallel: false,
 });
 
+const EMPTY_CONFIG: SwissConfig = {
+  model: "",
+  reviews: [],
+};
+
 export function ConfigEditor() {
-  const [config, setConfig] = useState<SwissConfig>({
-    model: "",
-    reviews: [],
-  });
+  const [workflows, setWorkflows] = useState<string[]>([]);
+  const [selectedWorkflow, setSelectedWorkflow] = useState("");
+  const [newWorkflowName, setNewWorkflowName] = useState("");
+  const [renameWorkflowName, setRenameWorkflowName] = useState("");
+  const [config, setConfig] = useState<SwissConfig>(EMPTY_CONFIG);
   const [prompts, setPrompts] = useState<PromptMap>({});
   const [loading, setLoading] = useState(true);
+  const [loadingConfig, setLoadingConfig] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -51,21 +59,56 @@ export function ConfigEditor() {
     let canceled = false;
     const load = async () => {
       try {
-        const [configRes, promptsRes] = await Promise.all([
-          fetch("/api/config"),
+        const [workflowsRes, promptsRes] = await Promise.all([
+          fetch("/api/workflows"),
           fetch("/api/prompts"),
         ]);
-        const configData = (await configRes.json()) as {
-          config?: SwissConfig;
+        const workflowData = (await workflowsRes.json()) as {
+          workflows?: string[];
         };
         const promptData = (await promptsRes.json()) as {
           prompts?: { name: string; content: string }[];
         };
         if (canceled) return;
-        const loadedConfig = configData.config ?? { model: "", reviews: [] };
+        const loadedWorkflows = workflowData.workflows ?? [];
         const loadedPrompts = Object.fromEntries(
           (promptData.prompts ?? []).map((prompt) => [prompt.name, prompt.content])
         );
+
+        setWorkflows(loadedWorkflows);
+        setSelectedWorkflow("");
+        setPrompts(loadedPrompts);
+      } catch {
+        if (!canceled) {
+          setConfig(EMPTY_CONFIG);
+          setPrompts({});
+        }
+      } finally {
+        if (!canceled) setLoading(false);
+      }
+    };
+
+    void load();
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedWorkflow) return;
+
+    let canceled = false;
+    const load = async () => {
+      setLoadingConfig(true);
+      try {
+        const configRes = await fetch(
+          `/api/config?workflow=${encodeURIComponent(selectedWorkflow)}`
+        );
+        const configData = (await configRes.json()) as {
+          config?: SwissConfig;
+        };
+        if (canceled) return;
+        const loadedConfig = configData.config ?? EMPTY_CONFIG;
         setConfig({
           model: loadedConfig.model ?? "",
           reviews: (loadedConfig.reviews ?? []).map((review) => ({
@@ -76,22 +119,22 @@ export function ConfigEditor() {
             parallel: review.parallel ?? false,
           })),
         });
-        setPrompts(loadedPrompts);
       } catch {
         if (!canceled) {
-          setConfig({ model: "", reviews: [] });
-          setPrompts({});
+          setConfig(EMPTY_CONFIG);
         }
       } finally {
-        if (!canceled) setLoading(false);
+        if (!canceled) {
+          setLoadingConfig(false);
+        }
       }
     };
 
-    load();
+    void load();
     return () => {
       canceled = true;
     };
-  }, []);
+  }, [selectedWorkflow]);
 
   const reviewCount = config.reviews.length;
 
@@ -108,6 +151,10 @@ export function ConfigEditor() {
       );
       return;
     }
+    if (!selectedWorkflow) {
+      setMessage("workflow を選択してください");
+      return;
+    }
     setSaving(true);
     setMessage(null);
     const configToSave = {
@@ -119,7 +166,7 @@ export function ConfigEditor() {
         parallel: review.parallel,
       })),
     };
-    const res = await fetch("/api/config", {
+    const res = await fetch(`/api/config?workflow=${encodeURIComponent(selectedWorkflow)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ config: configToSave }),
@@ -137,6 +184,92 @@ export function ConfigEditor() {
     }
     setSaving(false);
     setMessage(res.ok ? "保存しました" : "保存に失敗しました");
+  };
+
+  const createWorkflow = async () => {
+    const workflow = newWorkflowName.trim();
+    if (!workflow) {
+      setMessage("新規 workflow 名を入力してください");
+      return;
+    }
+    if (workflows.includes(workflow)) {
+      setMessage("同名の workflow がすでに存在します");
+      return;
+    }
+    if (!WORKFLOW_NAME_PATTERN.test(workflow)) {
+      setMessage("workflow名は英数字・ハイフン・アンダースコアのみ使用できます");
+      return;
+    }
+
+    setSaving(true);
+    setMessage(null);
+    const res = await fetch(`/api/config?workflow=${encodeURIComponent(workflow)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config: EMPTY_CONFIG }),
+    });
+    setSaving(false);
+
+    if (!res.ok) {
+      setMessage("workflow の作成に失敗しました");
+      return;
+    }
+
+    setWorkflows((prev) => [...prev, workflow].sort((a, b) => a.localeCompare(b)));
+    setSelectedWorkflow(workflow);
+    setNewWorkflowName("");
+    setMessage(`workflow '${workflow}' を作成しました`);
+  };
+
+  const renameWorkflow = async () => {
+    const from = selectedWorkflow.trim();
+    const to = renameWorkflowName.trim();
+
+    if (!from) {
+      setMessage("workflow を選択してください");
+      return;
+    }
+    if (!to) {
+      setMessage("変更後 workflow 名を入力してください");
+      return;
+    }
+    if (from === to) {
+      setMessage("変更前と変更後の workflow 名が同じです");
+      return;
+    }
+    if (workflows.includes(to)) {
+      setMessage("同名の workflow がすでに存在します");
+      return;
+    }
+    if (!WORKFLOW_NAME_PATTERN.test(to)) {
+      setMessage("workflow名は英数字・ハイフン・アンダースコアのみ使用できます");
+      return;
+    }
+
+    setSaving(true);
+    setMessage(null);
+    const res = await fetch("/api/workflows/rename", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from, to }),
+    });
+
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setSaving(false);
+      setMessage(data.error ?? "workflow 名の変更に失敗しました");
+      return;
+    }
+
+    setWorkflows((prev) =>
+      prev
+        .map((workflow) => (workflow === from ? to : workflow))
+        .sort((a, b) => a.localeCompare(b))
+    );
+    setSelectedWorkflow(to);
+    setRenameWorkflowName("");
+    setSaving(false);
+    setMessage(`workflow 名を '${from}' から '${to}' に変更しました`);
   };
 
   const updateModel = (value: string) => {
@@ -205,13 +338,13 @@ export function ConfigEditor() {
         <div>
           <h2 className="text-xl font-semibold">設定フォーム</h2>
           <p className="text-sm text-slate-300">
-            ワークフローのステップとプロンプトをまとめて編集できます。
+            workflow ごとのステップと共有プロンプトを編集できます。
           </p>
         </div>
         <button
           className="rounded-full bg-blue-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
           onClick={save}
-          disabled={saving || loading}
+          disabled={saving || loading || loadingConfig || !selectedWorkflow}
         >
           {saving ? "保存中..." : "保存"}
         </button>
@@ -221,6 +354,77 @@ export function ConfigEditor() {
         <p className="text-sm text-slate-300">読み込み中...</p>
       ) : (
         <div className="space-y-6">
+          <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+            <h3 className="text-sm font-semibold text-slate-200">workflow</h3>
+            {workflows.length === 0 && (
+              <p className="mt-2 text-xs text-slate-400">
+                workflow がまだありません。新規作成してから設定を編集してください。
+              </p>
+            )}
+            <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_auto]">
+              <select
+                className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                value={selectedWorkflow}
+                onChange={(event) => {
+                  setSelectedWorkflow(event.target.value);
+                  setMessage(null);
+                }}
+                disabled={workflows.length === 0}
+              >
+                {workflows.length === 0 ? (
+                  <option value="">workflow がありません</option>
+                ) : (
+                  <option value="">workflow を選択してください</option>
+                )}
+                {workflows.map((workflow) => (
+                  <option key={workflow} value={workflow}>
+                    {workflow}
+                  </option>
+                ))}
+              </select>
+              <div className="flex gap-2">
+                <input
+                  className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                  placeholder="new-workflow"
+                  value={newWorkflowName}
+                  onChange={(event) => setNewWorkflowName(event.target.value)}
+                />
+                <button
+                  className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-200 disabled:opacity-50"
+                  onClick={createWorkflow}
+                  type="button"
+                  disabled={saving}
+                >
+                  新規作成
+                </button>
+              </div>
+            </div>
+            <div className="mt-3 grid gap-2 lg:grid-cols-[1fr_auto]">
+              <input
+                className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                placeholder="rename-workflow"
+                value={renameWorkflowName}
+                onChange={(event) => setRenameWorkflowName(event.target.value)}
+              />
+              <button
+                className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-200 disabled:opacity-50"
+                onClick={renameWorkflow}
+                type="button"
+                disabled={saving || !selectedWorkflow}
+              >
+                名前変更
+              </button>
+            </div>
+          </div>
+
+          {selectedWorkflow && loadingConfig ? (
+            <p className="text-sm text-slate-300">workflow 設定を読み込み中...</p>
+          ) : !selectedWorkflow ? (
+            <div className="rounded-xl border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400">
+              編集する workflow を選択するか、新規作成してください。
+            </div>
+          ) : (
+            <>
           <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
             <h3 className="text-sm font-semibold text-slate-200">グローバル設定</h3>
             <div className="mt-3 space-y-2">
@@ -386,6 +590,8 @@ export function ConfigEditor() {
               ))}
             </div>
           </div>
+            </>
+          )}
         </div>
       )}
 

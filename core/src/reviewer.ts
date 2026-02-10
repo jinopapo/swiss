@@ -7,7 +7,7 @@ const reviewItemSchema = z.object({
   review: z.string(),
   score: z.number().int().min(0).max(100),
   filePath: z.string(),
-  line: z.number().int().min(1),
+  line: z.number().int().min(0),
 });
 
 const reviewResultSchema = z.object({

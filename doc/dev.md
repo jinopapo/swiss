@@ -2,7 +2,8 @@
 
 このドキュメントは、swiss の開発に必要な情報をまとめたものです。
 
-利用方法は README.md、設定ファイル仕様は doc/config.md を参照してください。
+利用方法は README.md、設定ファイル仕様は doc/config.md、
+設定UI の API 仕様は doc/api.md を参照してください。
 
 ## リポジトリ構成（monorepo）
 - `cli/`: CLI（`swiss` コマンド）
@@ -43,12 +44,16 @@ npm run -w web build
 
 ### CLI をローカル実行（ビルドなし）
 ```bash
-echo "hello" | npm run dev -- review --text
-git diff | npm run dev -- review --diff
+echo "hello" | npm run dev -- review example1 --text
+git diff | npm run dev -- review example2 --diff
 ```
 
-> [!NOTE]
-> `swiss review` は標準入力（stdin）が必須です。空の場合はエラーで終了します。
+`--text`/`--diff` を省略した場合は `text` として実行されます。
+
+`stdin` が空の場合はエラーで終了します。
+
+`review` は **workflow 名の指定が必須** です（`swiss review <workflow>`）。
+指定した workflow に対応する `.swiss/flows/<workflow>.yaml` が存在しない場合はエラーになります。
 
 ### Web UI（設定画面）
 
@@ -64,7 +69,6 @@ swiss config
 
 `swiss config` は、利用者のカレントディレクトリを `SWISS_BASE_DIR` として Web に渡し、
 そのディレクトリ配下の `.swiss/` を編集対象として扱います。
-
 終了するときはターミナルで `Ctrl-C` を押してください（サーバーも一緒に停止します）。
 
 ## グローバルインストールと nodenv まわり
