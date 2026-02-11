@@ -110,7 +110,10 @@ function formatReview(result: { name: string; review: string; score: number; fil
 function generateFishCompletion(): string {
   return [
     "complete -c swiss -f",
-    "complete -c swiss -n '__fish_seen_subcommand_from review' -a '(ls -1 .swiss/flows/*.yaml 2>/dev/null | sed -E \"s#.*/##; s#\\\\.yaml$##\")' -d 'workflow名'",
+    "complete -c swiss -n '__fish_use_subcommand' -a review -d 'レビューを実行'",
+    "complete -c swiss -n '__fish_use_subcommand' -a config -d '設定UIを開く'",
+    "complete -c swiss -n '__fish_use_subcommand' -a completion -d '補完スクリプトを出力'",
+    "complete -c swiss -n '__fish_seen_subcommand_from review' -a '(for f in .swiss/flows/*.yaml; test -e \"$f\"; and basename \"$f\" .yaml; end)' -d 'workflow名'",
     "complete -c swiss -n '__fish_seen_subcommand_from review' -l text -d 'textレビュー'",
     "complete -c swiss -n '__fish_seen_subcommand_from review' -l diff -d 'diffレビュー'",
     "complete -c swiss -n '__fish_seen_subcommand_from completion' -a fish",
