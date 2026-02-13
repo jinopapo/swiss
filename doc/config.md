@@ -2,6 +2,7 @@
 このドキュメントでは、swiss が参照する設定ファイルの仕様を説明します。
 
 - ワークフロー定義: `.swiss/flows/{workflow}.yaml`
+- workflow 共有コンテキスト: `.swiss/contexts/{workflow}.md`
 - レビュー観点（プロンプト）: `.swiss/prompts/{review_name}.md`
 
 > [!NOTE]
@@ -63,6 +64,23 @@ reviews:
     parallel: true
 ```
 
+## .swiss/contexts/{workflow}.md
+workflow 単位で、全レビューに共通して適用したいコンテキストを定義する Markdown ファイルです。
+
+- `swiss review <workflow>` 実行時に読み込まれます
+- レビュー時のプロンプトの**最上部**に差し込まれます
+- **必須ファイル**です（未作成/空の場合はエラーになります）
+- このファイル内で、stdin 入力の意味づけ（例: 「入力は git diff」「入力は仕様テキスト」）を定義してください
+- `core/prompts` の built-in テンプレートは廃止されており、入力解釈は workflow context 側で行います
+
+例:
+
+```md
+# プロジェクト前提
+- TypeScript の strict mode を前提にしてください
+- public API の破壊的変更は特に厳しくチェックしてください
+```
+
 ## 設定UI / Web API について
 
 設定UI（`swiss config` / `npm run web`）が利用する Web API の仕様は `doc/api.md` を参照してください。
@@ -79,6 +97,9 @@ reviews:
   flows/
     default.yaml
     security.yaml
+  contexts/
+    default.md
+    security.md
   prompts/
     quality.md
     security.md

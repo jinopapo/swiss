@@ -13,5 +13,5 @@ npm run knip
 ```
 
 ```bash
-git diff | npm run dev -- review default --diff
+git diff | npm run dev -- review doc-review --diff
 ```

@@ -12,6 +12,14 @@ function workflowConfigPath(workflow: string) {
   return path.join(flowsDir(), `${workflow}.yaml`);
 }
 
+function contextsDir() {
+  return path.join(baseDir, ".swiss", "contexts");
+}
+
+function workflowContextPath(workflow: string) {
+  return path.join(contextsDir(), `${workflow}.md`);
+}
+
 function normalizeWorkflowName(workflow: string): string {
   const normalized = workflow.trim();
   if (!normalized) {
@@ -72,6 +80,8 @@ export async function renameWorkflow(from: string, to: string): Promise<void> {
 
   const fromPath = workflowConfigPath(fromName);
   const toPath = workflowConfigPath(toName);
+  const fromContextPath = workflowContextPath(fromName);
+  const toContextPath = workflowContextPath(toName);
 
   try {
     await fs.access(fromPath);
@@ -89,6 +99,15 @@ export async function renameWorkflow(from: string, to: string): Promise<void> {
   }
 
   await fs.rename(fromPath, toPath);
+
+  await fs.mkdir(contextsDir(), { recursive: true });
+  try {
+    await fs.rename(fromContextPath, toContextPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+  }
 }
 
 export async function listPrompts(): Promise<{ name: string; content: string }[]> {
@@ -114,4 +133,22 @@ export async function writePromptFile(name: string, content: string): Promise<vo
   const dir = promptsDir();
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(dir, `${name}.md`), content, "utf8");
+}
+
+export async function readContextFile(workflow: string): Promise<string> {
+  const normalized = normalizeWorkflowName(workflow);
+  try {
+    return await fs.readFile(workflowContextPath(normalized), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+    return "";
+  }
+}
+
+export async function writeContextFile(workflow: string, content: string): Promise<void> {
+  const normalized = normalizeWorkflowName(workflow);
+  await fs.mkdir(contextsDir(), { recursive: true });
+  await fs.writeFile(workflowContextPath(normalized), content, "utf8");
 }

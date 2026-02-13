@@ -1,6 +1,5 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import YAML from "yaml";
 import { z } from "zod";
 import type { SwissConfig } from "./types.js";
@@ -26,8 +25,16 @@ function flowsDir(baseDir: string): string {
   return path.join(baseDir, ".swiss", "flows");
 }
 
+function contextsDir(baseDir: string): string {
+  return path.join(baseDir, ".swiss", "contexts");
+}
+
 function workflowConfigPath(baseDir: string, workflowName: string): string {
   return path.join(flowsDir(baseDir), `${workflowName}.yaml`);
+}
+
+function workflowContextPath(baseDir: string, workflowName: string): string {
+  return path.join(contextsDir(baseDir), `${workflowName}.md`);
 }
 
 export async function loadWorkflowConfig(baseDir: string, workflowName: string): Promise<SwissConfig> {
@@ -55,8 +62,19 @@ export async function loadPrompt(baseDir: string, name: string): Promise<string>
   return fs.readFile(promptPath, "utf8");
 }
 
-export async function loadBuiltInPrompt(kind: "text" | "diff"): Promise<string> {
-  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-  const promptPath = path.resolve(moduleDir, "..", "prompts", `${kind}.md`);
-  return fs.readFile(promptPath, "utf8");
+export async function loadWorkflowContext(baseDir: string, workflowName: string): Promise<string> {
+  const normalizedWorkflowName = workflowNameSchema.parse(workflowName);
+  const contextPath = workflowContextPath(baseDir, normalizedWorkflowName);
+  try {
+    const context = await fs.readFile(contextPath, "utf8");
+    if (!context.trim()) {
+      throw new Error(`workflow context が空です: .swiss/contexts/${normalizedWorkflowName}.md`);
+    }
+    return context;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new Error(`設定ファイルが見つかりません: .swiss/contexts/${normalizedWorkflowName}.md`);
+    }
+    throw error;
+  }
 }

@@ -12,6 +12,10 @@
   - 指定 workflow の設定を返します
 - `POST /api/config?workflow=<name>`
   - 指定 workflow の設定を保存します
+- `GET /api/context?workflow=<name>`
+  - 指定 workflow の共有コンテキスト（`.swiss/contexts/<workflow>.md`）を返します
+- `POST /api/context?workflow=<name>`
+  - 指定 workflow の共有コンテキストを保存します
 - `GET /api/prompts`
   - `.swiss/prompts/*.md` の一覧（`name`, `content`）を返します
 - `POST /api/prompts/<name>`
@@ -46,6 +50,15 @@
 - `POST /api/prompts/<name>` は、リクエスト本文の `content`（文字列）を `.swiss/prompts/<name>.md` として保存します
   - `content` を省略した場合は空文字列として保存されます
   - 現在の実装では `<name>` に対するバリデーションは行っていません
+
+## `/api/context` の挙動
+
+- `GET /api/context?workflow=<name>` は、`.swiss/contexts/<workflow>.md` の内容を `{ content }` で返します
+  - ファイルが存在しない場合は `content: ""` を返します
+- `POST /api/context?workflow=<name>` は、リクエスト本文の `content`（文字列）を保存します
+  - `content` を省略した場合は空文字列として保存されます
+- `workflow` クエリを省略した場合は `default` workflow を利用します（`/api/config` と同様）
+- `workflow` 名に `a-z`, `A-Z`, `0-9`, `-`, `_` 以外を含む場合は `400` を返します
 
 ## CLI との挙動差分
 

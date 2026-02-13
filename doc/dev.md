@@ -48,9 +48,11 @@ echo "hello" | npm run dev -- review example1 --text
 git diff | npm run dev -- review example2 --diff
 ```
 
-`--text`/`--diff` を省略した場合は `text` として実行されます。
+レビュー実行前に `.swiss/contexts/<workflow>.md` を作成し、入力（stdin）の意味づけ
+（例: git diff / 仕様テキスト）を記述してください。未作成または空の場合はエラーになります。
 
-`stdin` が空の場合はエラーで終了します。
+`stdin` が空の場合は、`--diff` 指定時のみ「差分なし」としてスキップされます。
+`--diff` 以外ではエラーで終了します。
 
 `review` は **workflow 名の指定が必須** です（`swiss review <workflow>`）。
 指定した workflow に対応する `.swiss/flows/<workflow>.yaml` が存在しない場合はエラーになります。

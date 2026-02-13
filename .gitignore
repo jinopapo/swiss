@@ -21,3 +21,5 @@ build/
 .idea/
 
 *.log
+
+implementation_plan.md

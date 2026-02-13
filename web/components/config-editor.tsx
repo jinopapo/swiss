@@ -50,6 +50,7 @@ export function ConfigEditor() {
   const [renameWorkflowName, setRenameWorkflowName] = useState("");
   const [config, setConfig] = useState<SwissConfig>(EMPTY_CONFIG);
   const [prompts, setPrompts] = useState<PromptMap>({});
+  const [context, setContext] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingConfig, setLoadingConfig] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -109,6 +110,10 @@ export function ConfigEditor() {
         };
         if (canceled) return;
         const loadedConfig = configData.config ?? EMPTY_CONFIG;
+        const contextRes = await fetch(
+          `/api/context?workflow=${encodeURIComponent(selectedWorkflow)}`
+        );
+        const contextData = (await contextRes.json()) as { content?: string };
         setConfig({
           model: loadedConfig.model ?? "",
           reviews: (loadedConfig.reviews ?? []).map((review) => ({
@@ -119,9 +124,11 @@ export function ConfigEditor() {
             parallel: review.parallel ?? false,
           })),
         });
+        setContext(contextData.content ?? "");
       } catch {
         if (!canceled) {
           setConfig(EMPTY_CONFIG);
+          setContext("");
         }
       } finally {
         if (!canceled) {
@@ -172,15 +179,22 @@ export function ConfigEditor() {
       body: JSON.stringify({ config: configToSave }),
     });
     if (res.ok) {
-      await Promise.all(
-        config.reviews.map((review) =>
-          fetch(`/api/prompts/${review.name}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: prompts[review.name] ?? "" }),
-          })
-        )
+      const promptRequests = config.reviews.map((review) =>
+        fetch(`/api/prompts/${review.name}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: prompts[review.name] ?? "" }),
+        })
       );
+      const contextRequest = fetch(
+        `/api/context?workflow=${encodeURIComponent(selectedWorkflow)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: context }),
+        }
+      );
+      await Promise.all([...promptRequests, contextRequest]);
     }
     setSaving(false);
     setMessage(res.ok ? "保存しました" : "保存に失敗しました");
@@ -218,6 +232,7 @@ export function ConfigEditor() {
     setWorkflows((prev) => [...prev, workflow].sort((a, b) => a.localeCompare(b)));
     setSelectedWorkflow(workflow);
     setNewWorkflowName("");
+    setContext("");
     setMessage(`workflow '${workflow}' を作成しました`);
   };
 
@@ -443,6 +458,22 @@ export function ConfigEditor() {
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+            <h3 className="text-sm font-semibold text-slate-200">共有コンテキスト</h3>
+            <p className="mt-1 text-xs text-slate-400">
+              workflow 内の全レビューに共通で差し込むコンテキストです（プロンプト最上部）。
+            </p>
+            <div className="mt-3 space-y-2">
+              <label className="text-xs text-slate-400">内容</label>
+              <textarea
+                className="min-h-[140px] w-full resize-y rounded-lg border border-slate-800 bg-slate-900 p-3 font-mono text-sm"
+                placeholder="この workflow 全体で共有したい前提・ルールを入力"
+                value={context}
+                onChange={(event) => setContext(event.target.value)}
+              />
             </div>
           </div>
 

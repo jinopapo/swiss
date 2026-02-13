@@ -35,9 +35,8 @@ cat doc.md | swiss review example1 --text
 git diff | swiss review example2 --diff
 ```
 
-`--text`/`--diff` を省略した場合は `text` として扱われます。
-
-`--text` と `--diff` を同時に指定した場合は `--diff` が優先されます。
+`--diff` は、stdin が空のときに「差分なし」としてスキップするための実行オプションです。
+`--text` は明示用オプションですが、レビュー内容の解釈自体は `.swiss/contexts/<workflow>.md` に依存します。
 
 `swiss review` は **workflow 名の指定が必須** です（`swiss review <workflow>`）。
 指定した workflow に対応する `.swiss/flows/<workflow>.yaml` が存在しない場合はエラーになります。
@@ -47,8 +46,11 @@ git diff | swiss review example2 --diff
 
 ### レビュー実行仕様
 - `swiss review <workflow>` で `.swiss/flows/<workflow>.yaml` を読み込みます
+- `.swiss/contexts/<workflow>.md` は必須です（未作成/空の場合はエラー）
 - 対象 workflow の `reviews` を**上から順番に逐次実行**します
 - 各レビューは `.swiss/prompts/{review_name}.md` の内容（レビュー観点）を使って実行します
+- 入力（stdin）の意味づけ（例: git diff / 仕様テキスト）は `.swiss/contexts/<workflow>.md` に記述します
+- `core/prompts` の built-in テンプレートは廃止され、入力解釈は workflow context 側で行います
 - AI出力は Structured Output（JSON Schema）で受け取り、結果のうち **`score > 80`（81以上）** のものだけを「要対応」として出力します
 - `line` は 0 以上の整数です（`0` はファイル全体への指摘を表す場合があります）
 - `line = 0` の場合、CLI 出力では `行番号: 全体 (0)` と表示されます
@@ -109,8 +111,21 @@ reviews:
     model: gpt-5.2
 ```
 
+`.swiss/contexts/default.md`
+```md
+# 入力の前提
+- 入力は git diff です。
+- 変更差分を対象にレビューしてください。
+```
+
 `.swiss/prompts/quality.md`
 ```md
 # コード品質レビュー
 可読性、設計、保守性の観点でレビューしてください。
+```
+
+`.swiss/prompts/security.md`
+```md
+# セキュリティレビュー
+脆弱性や機密情報漏えいのリスクがないかをレビューしてください。
 ```

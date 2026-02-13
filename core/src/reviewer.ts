@@ -1,7 +1,7 @@
 import { Codex } from "@openai/codex-sdk";
 import { z } from "zod";
 import type { ReviewInput, ReviewResult, ReviewSpec, SwissConfig } from "./types.js";
-import { loadBuiltInPrompt, loadPrompt } from "./config.js";
+import { loadPrompt } from "./config.js";
 
 const reviewItemSchema = z.object({
   review: z.string(),
@@ -56,6 +56,7 @@ type ReviewRunnerOptions = {
   baseDir: string;
   config: SwissConfig;
   input: ReviewInput;
+  context?: string;
 };
 
 export async function runReviews(
@@ -75,7 +76,7 @@ export async function runReviews(
       baseDir: opts.baseDir,
       input: opts.input,
       review,
-      defaultModel: opts.config.model,
+      context: opts.context,
     });
     results.push(...result);
     if (result.length > 0) {
@@ -91,16 +92,12 @@ async function runSingleReview(args: {
   baseDir: string;
   input: ReviewInput;
   review: ReviewSpec;
-  defaultModel: string;
+  context?: string;
 }): Promise<ReviewResult[]> {
-  const [userPrompt, builtInPrompt] = await Promise.all([
-    loadPrompt(args.baseDir, args.review.name),
-    loadBuiltInPrompt(args.input.kind),
-  ]);
+  const userPrompt = await loadPrompt(args.baseDir, args.review.name);
   const message = buildMessage({
+    context: args.context,
     userPrompt,
-    builtInPrompt,
-    review: args.review,
     input: args.input,
   });
 
@@ -123,19 +120,22 @@ async function runSingleReview(args: {
 }
 
 function buildMessage(args: {
+  context?: string;
   userPrompt: string;
-  builtInPrompt: string;
-  review: ReviewSpec;
   input: ReviewInput;
 }): string {
+  const trimmedContext = args.context?.trim() ?? "";
   return [
-    args.builtInPrompt,
-    "\n```\n",
-    args.input.content,
-    "\n```\n",
-    "\n---\n",
+    trimmedContext ? "# 前提条件" : "",
+    trimmedContext,
+    trimmedContext ? "\n---\n" : "",
     "# レビュー観点",
     args.userPrompt,
+    "\n---\n",
+    "# 入力",
+    "```",
+    args.input.content,
+    "```",
   ]
     .filter(Boolean)
     .join("\n");

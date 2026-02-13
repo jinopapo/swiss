@@ -11,7 +11,6 @@ export type SwissConfig = {
 };
 
 export type ReviewInput = {
-  kind: "text" | "diff";
   content: string;
 };
 

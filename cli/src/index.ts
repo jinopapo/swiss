@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { listWorkflows, loadWorkflowConfig, runReviews } from "@swiss/core";
+import { listWorkflows, loadWorkflowConfig, loadWorkflowContext, runReviews } from "@swiss/core";
 import { readStdin } from "./stdin.js";
 import { openConfigUi } from "./open-config.js";
 import type { ReviewInput } from "@swiss/core";
@@ -27,10 +27,10 @@ program
       process.exit(1);
     }
 
-    const kind = options.diff ? "diff" : "text";
+    const isDiffMode = Boolean(options.diff);
     const content = await readStdin();
     if (!content.trim()) {
-      if (kind === "diff") {
+      if (isDiffMode) {
         console.log("差分がないためレビューをスキップしました");
         return;
       }
@@ -38,11 +38,12 @@ program
       process.exit(1);
     }
 
-    const input: ReviewInput = { kind, content };
+    const input: ReviewInput = { content };
     const baseDir = process.env.INIT_CWD ?? process.cwd();
     try {
       const config = await loadWorkflowConfig(baseDir, workflowName);
-      const { results, stopReason } = await runReviews({ baseDir, config, input });
+      const context = await loadWorkflowContext(baseDir, workflowName);
+      const { results, stopReason } = await runReviews({ baseDir, config, input, context });
 
       for (const result of results) {
         console.log(formatReview(result));
