@@ -40,7 +40,7 @@ const jsonSchema = {
             type: "integer",
             minimum: 0,
             maximum: 100,
-            description: "スコア（0-100）。80超えは要対応",
+            description: "スコア（0-100）。80超えは要対応。0は全く問題なし、100は完全に問題ありを意味する。",
           },
         },
         required: ["review", "score", "filePath", "line"],
