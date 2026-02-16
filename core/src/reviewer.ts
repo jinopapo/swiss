@@ -57,19 +57,49 @@ type ReviewRunnerOptions = {
   config: SwissConfig;
   input: ReviewInput;
   context?: string;
+  onProgress?: (event: ReviewProgressEvent) => void;
 };
+
+type ReviewProgressEvent =
+  | {
+      type: "review_started";
+      index: number;
+      total: number;
+      name: string;
+      model: string;
+    }
+  | {
+      type: "review_finished";
+      index: number;
+      total: number;
+      name: string;
+      elapsedMs: number;
+      flaggedCount: number;
+    };
 
 export async function runReviews(
   opts: ReviewRunnerOptions
 ): Promise<{ results: ReviewResult[]; stopReason: "needs_action" | "completed" }>{
   const codex = new Codex({ apiKey: process.env.OPENAI_API_KEY });
   const results: ReviewResult[] = [];
+  const total = opts.config.reviews.length;
 
-  for (const review of opts.config.reviews) {
+  for (const [index, review] of opts.config.reviews.entries()) {
+    const reviewIndex = index + 1;
+    const model = review.model ?? opts.config.model;
+    opts.onProgress?.({
+      type: "review_started",
+      index: reviewIndex,
+      total,
+      name: review.name,
+      model,
+    });
+
+    const startedAt = Date.now();
     const thread = codex.startThread({
       workingDirectory: opts.baseDir,
       skipGitRepoCheck: true,
-      model: review.model ?? opts.config.model,
+      model,
     });
     const result = await runSingleReview({
       thread,
@@ -78,6 +108,16 @@ export async function runReviews(
       review,
       context: opts.context,
     });
+
+    opts.onProgress?.({
+      type: "review_finished",
+      index: reviewIndex,
+      total,
+      name: review.name,
+      elapsedMs: Date.now() - startedAt,
+      flaggedCount: result.length,
+    });
+
     results.push(...result);
     if (result.length > 0) {
       return { results, stopReason: "needs_action" };

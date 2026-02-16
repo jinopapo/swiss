@@ -43,7 +43,26 @@ program
     try {
       const config = await loadWorkflowConfig(baseDir, workflowName);
       const context = await loadWorkflowContext(baseDir, workflowName);
-      const { results, stopReason } = await runReviews({ baseDir, config, input, context });
+      const { results, stopReason } = await runReviews({
+        baseDir,
+        config,
+        input,
+        context,
+        onProgress: (event) => {
+          if (event.type === "review_started") {
+            console.error(
+              `▶ [${event.index}/${event.total}] レビュー実行中: ${event.name} (model: ${event.model})`
+            );
+            return;
+          }
+
+          const elapsedSec = (event.elapsedMs / 1000).toFixed(1);
+          const flaggedLabel = event.flaggedCount > 0 ? ` / 要対応 ${event.flaggedCount}件` : "";
+          console.error(
+            `✓ [${event.index}/${event.total}] 完了: ${event.name} (${elapsedSec}s)${flaggedLabel}`
+          );
+        },
+      });
 
       for (const result of results) {
         console.log(formatReview(result));
