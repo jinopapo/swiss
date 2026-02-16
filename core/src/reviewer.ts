@@ -166,6 +166,9 @@ function buildMessage(args: {
 }): string {
   const trimmedContext = args.context?.trim() ?? "";
   return [
+    "# スコアリングルール",
+    "0は全く問題なし、100は完全に問題ありを意味する。80超えは要対応とみなす。",
+    "\n---\n",
     trimmedContext ? "# 前提条件" : "",
     trimmedContext,
     trimmedContext ? "\n---\n" : "",
