@@ -46,6 +46,7 @@ npm run -w web build
 ```bash
 echo "hello" | npm run dev -- review example1 --text
 git diff | npm run dev -- review example2 --diff
+git diff | npm run dev -- review example1 example2 --diff
 ```
 
 レビュー実行前に `.swiss/contexts/<workflow>.md` を作成し、入力（stdin）の意味づけ
@@ -54,7 +55,7 @@ git diff | npm run dev -- review example2 --diff
 `stdin` が空の場合は、`--diff` 指定時のみ「差分なし」としてスキップされます。
 `--diff` 以外ではエラーで終了します。
 
-`review` は **workflow 名の指定が必須** です（`swiss review <workflow>`）。
+`review` は **workflow 名の指定が必須** です（`swiss review <workflow...>`）。
 指定した workflow に対応する `.swiss/flows/<workflow>.yaml` が存在しない場合はエラーになります。
 
 ### Web UI（設定画面）

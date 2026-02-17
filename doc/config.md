@@ -9,7 +9,7 @@
 > `.swiss/flows/{workflow}.yaml` のスキーマは `core/src/config.ts` の Zod 定義に準拠します。
 
 ## .swiss/flows/{workflow}.yaml
-ワークフロー（レビューの並び）を定義する YAML です。CLI は `swiss review <workflow>` でこのファイルを読み込みます。
+ワークフロー（レビューの並び）を定義する YAML です。CLI は `swiss review <workflow...>` で指定した順にこのファイルを読み込みます。
 
 ### workflow 名の制約
 `{workflow}` には以下のみ使用できます。
@@ -67,9 +67,9 @@ reviews:
 ## .swiss/contexts/{workflow}.md
 workflow 単位で、全レビューに共通して適用したいコンテキストを定義する Markdown ファイルです。
 
-- `swiss review <workflow>` 実行時に読み込まれます
+- `swiss review <workflow...>` 実行時に、各 workflow ごとに対応する context が読み込まれます
 - レビュー時のプロンプトの**最上部**に差し込まれます
-- **必須ファイル**です（未作成/空の場合はエラーになります）
+- **必須ファイル**です（未作成/空の場合は、その workflow の実行時にエラーになります）
 - このファイル内で、stdin 入力の意味づけ（例: 「入力は git diff」「入力は仕様テキスト」）を定義してください
 - `core/prompts` の built-in テンプレートは廃止されており、入力解釈は workflow context 側で行います
 

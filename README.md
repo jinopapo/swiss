@@ -33,28 +33,29 @@ npm install -g .
 ```bash
 cat doc.md | swiss review example1 --text
 git diff | swiss review example2 --diff
+git diff | swiss review example1 example2 --diff
 ```
 
 `--diff` は、stdin が空のときに「差分なし」としてスキップするための実行オプションです。
 `--text` は明示用オプションですが、レビュー内容の解釈自体は `.swiss/contexts/<workflow>.md` に依存します。
 
-`swiss review` は **workflow 名の指定が必須** です（`swiss review <workflow>`）。
+`swiss review` は **workflow 名の指定が必須** です（`swiss review <workflow...>`）。
 指定した workflow に対応する `.swiss/flows/<workflow>.yaml` が存在しない場合はエラーになります。
 
 存在しない workflow を指定した場合は、エラー時に利用可能な workflow 一覧
 （`.swiss/flows/*.yaml`）を表示して終了します。
 
 ### レビュー実行仕様
-- `swiss review <workflow>` で `.swiss/flows/<workflow>.yaml` を読み込みます
-- `.swiss/contexts/<workflow>.md` は必須です（未作成/空の場合はエラー）
-- 対象 workflow の `reviews` を**上から順番に逐次実行**します
+- `swiss review <workflow...>` で、指定順に `.swiss/flows/<workflow>.yaml` を読み込みます
+- 各 workflow ごとに `.swiss/contexts/<workflow>.md` を読み込みます（未作成/空の場合はエラー）
+- 各 workflow の `reviews` を**上から順番に逐次実行**し、workflow は **左から順に連結実行**されます
 - 各レビューは `.swiss/prompts/{review_name}.md` の内容（レビュー観点）を使って実行します
 - 入力（stdin）の意味づけ（例: git diff / 仕様テキスト）は `.swiss/contexts/<workflow>.md` に記述します
 - `core/prompts` の built-in テンプレートは廃止され、入力解釈は workflow context 側で行います
 - AI出力は Structured Output（JSON Schema）で受け取り、結果のうち **`score > 80`（81以上）** のものだけを「要対応」として出力します
 - `line` は 0 以上の整数です（`0` はファイル全体への指摘を表す場合があります）
 - `line = 0` の場合、CLI 出力では `行番号: 全体 (0)` と表示されます
-- 1件でも要対応が出た時点でレビューを打ち切り、CLI は終了コード `2` で終了します
+- 1件でも要対応が出た時点でレビューを打ち切り、CLI は終了コード `2` で終了します（複数 workflow 指定時も同様）
 
 ### 設定
 Web UI でワークフローとプロンプトの作成/更新ができます。
