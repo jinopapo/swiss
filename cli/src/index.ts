@@ -40,25 +40,30 @@ program
 
     const input: ReviewInput = { content };
     const baseDir = process.env.INIT_CWD ?? process.cwd();
-    const preparedWorkflows = await prepareWorkflowConfigs(baseDir, workflowNames);
-    const totalReviews = preparedWorkflows.reduce(
-      (sum, workflow) => sum + (workflow.config?.reviews.length ?? 0),
-      0
-    );
-    let finishedReviews = 0;
-
     try {
+      const preparedWorkflows = await prepareWorkflows(baseDir, workflowNames);
+      // review コマンドは全 workflow を一括実行するため、事前検証で1件でも失敗したら開始しない。
+      const workflowError = preparedWorkflows.find((workflow) => workflow.error)?.error;
+      if (workflowError) {
+        throw workflowError;
+      }
+
+      const totalReviews = preparedWorkflows.reduce(
+        (sum, workflow) => sum + (workflow.config?.reviews.length ?? 0),
+        0
+      );
+      let finishedReviews = 0;
+
       for (const workflow of preparedWorkflows) {
-        if (!workflow.config) {
-          throw workflow.error;
+        if (!workflow.config || workflow.context === undefined) {
+          throw new Error(`workflow の事前検証に失敗しました: ${workflow.name}`);
         }
 
-        const context = await loadWorkflowContext(baseDir, workflow.name);
         const { results, stopReason } = await runReviews({
           baseDir,
           config: workflow.config,
           input,
-          context,
+          context: workflow.context,
           onProgress: (event) => {
             const globalIndex = finishedReviews + event.index;
             const total = totalReviews > 0 ? totalReviews : event.total;
@@ -171,15 +176,17 @@ function isWorkflowConfigNotFoundError(error: unknown, workflow: string): boolea
 type PreparedWorkflow = {
   name: string;
   config?: SwissConfig;
+  context?: string;
   error?: unknown;
 };
 
-async function prepareWorkflowConfigs(baseDir: string, workflowNames: string[]): Promise<PreparedWorkflow[]> {
+async function prepareWorkflows(baseDir: string, workflowNames: string[]): Promise<PreparedWorkflow[]> {
   return Promise.all(
     workflowNames.map(async (workflowName) => {
       try {
         const config = await loadWorkflowConfig(baseDir, workflowName);
-        return { name: workflowName, config };
+        const context = await loadWorkflowContext(baseDir, workflowName);
+        return { name: workflowName, config, context };
       } catch (error) {
         return { name: workflowName, error };
       }

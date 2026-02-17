@@ -36,6 +36,13 @@ export async function POST(request: Request) {
   }
 
   const body = (await request.json()) as { content?: string };
-  await writeContextFile(workflow, body.content ?? "");
+  if (typeof body.content !== "string" || !body.content.trim()) {
+    return NextResponse.json(
+      { error: "context は空にできません" },
+      { status: 400 }
+    );
+  }
+
+  await writeContextFile(workflow, body.content);
   return NextResponse.json({ ok: true });
 }

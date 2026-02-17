@@ -98,15 +98,46 @@ export async function renameWorkflow(from: string, to: string): Promise<void> {
     }
   }
 
-  await fs.rename(fromPath, toPath);
-
-  await fs.mkdir(contextsDir(), { recursive: true });
   try {
-    await fs.rename(fromContextPath, toContextPath);
+    await fs.access(toContextPath);
+    throw new Error(`workflow '${toName}' の context はすでに存在します`);
   } catch (error) {
+    if (error instanceof Error && error.message.includes("すでに存在します")) {
+      throw error;
+    }
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
       throw error;
     }
+  }
+
+  let configRenamed = false;
+
+  try {
+    await fs.rename(fromPath, toPath);
+    configRenamed = true;
+
+    await fs.mkdir(contextsDir(), { recursive: true });
+    try {
+      await fs.access(fromContextPath);
+      await fs.rename(fromContextPath, toContextPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+    }
+  } catch (error) {
+    if (configRenamed) {
+      try {
+        await fs.rename(toPath, fromPath);
+      } catch (rollbackError) {
+        const originalMessage = error instanceof Error ? error.message : "workflow 名の変更に失敗しました";
+        const rollbackMessage =
+          rollbackError instanceof Error ? rollbackError.message : "設定ファイルのロールバックに失敗しました";
+        throw new Error(`${originalMessage} (ロールバック失敗: ${rollbackMessage})`);
+      }
+    }
+
+    throw error;
   }
 }
 
