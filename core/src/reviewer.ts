@@ -5,7 +5,7 @@ import { loadPrompt } from "./config.js";
 
 const reviewItemSchema = z.object({
   review: z.string(),
-  score: z.number().int().min(0).max(100),
+  score: z.number().int().min(0).max(10),
   filePath: z.string(),
   line: z.number().int().min(0),
 });
@@ -39,8 +39,8 @@ const jsonSchema = {
           score: {
             type: "integer",
             minimum: 0,
-            maximum: 100,
-            description: "スコア（0-100）。80超えは要対応。0は全く問題なし、100は完全に問題ありを意味する。",
+            maximum: 10,
+            description: "スコア（0-10）。",
           },
         },
         required: ["review", "score", "filePath", "line"],
@@ -149,7 +149,7 @@ async function runSingleReview(args: {
   const normalized = Array.isArray(rawParsed) ? { results: rawParsed } : rawParsed;
   const parsed = reviewResultSchema.parse(normalized);
   return parsed.results
-    .filter((item) => item.score > 80)
+    .filter((item) => isFlaggedScore(item.score))
     .map((item) => ({
       name: args.review.name,
       review: item.review,
@@ -159,6 +159,10 @@ async function runSingleReview(args: {
     }));
 }
 
+function isFlaggedScore(score: number): boolean {
+  return score >= 7;
+}
+
 function buildMessage(args: {
   context?: string;
   userPrompt: string;
@@ -166,8 +170,10 @@ function buildMessage(args: {
 }): string {
   const trimmedContext = args.context?.trim() ?? "";
   return [
+    "スコアリングルールとレビュー基準に基づいて、入力内容をレビューしてください。",
+    "\n",
     "# スコアリングルール",
-    "0は全く問題なし、100は完全に問題ありを意味する。80超えは要対応とみなす。",
+    "0は全く問題なし、10は完全に問題ありを意味する。",
     "\n---\n",
     trimmedContext ? "# 前提条件" : "",
     trimmedContext,

@@ -52,7 +52,6 @@ git diff | swiss review example1 example2 --diff
 - 各レビューは `.swiss/prompts/{review_name}.md` の内容（レビュー観点）を使って実行します
 - 入力（stdin）の意味づけ（例: git diff / 仕様テキスト）は `.swiss/contexts/<workflow>.md` に記述します
 - `core/prompts` の built-in テンプレートは廃止され、入力解釈は workflow context 側で行います
-- AI出力は Structured Output（JSON Schema）で受け取り、結果のうち **`score > 80`（81以上）** のものだけを「要対応」として出力します
 - `line` は 0 以上の整数です（`0` はファイル全体への指摘を表す場合があります）
 - `line = 0` の場合、CLI 出力では `行番号: 全体 (0)` と表示されます
 - 1件でも要対応が出た時点でレビューを打ち切り、CLI は終了コード `2` で終了します（複数 workflow 指定時も同様）
