@@ -11,8 +11,6 @@ out/
 dist/
 build/
 
-.swiss/
-
 .env
 .env.*
 !.env.example

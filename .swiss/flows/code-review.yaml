@@ -1,0 +1,6 @@
+model: gpt-5.2
+reviews:
+  - name: principal-check
+    description: 原則に従っているか
+    model: ""
+    parallel: false
