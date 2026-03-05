@@ -16,6 +16,7 @@ type SwissConfig = {
 };
 
 type PromptMap = Record<string, string>;
+type PromptReuseMode = "reference" | "copy";
 
 const MODEL_OPTIONS = [
   "gpt-5.2",
@@ -24,6 +25,14 @@ const MODEL_OPTIONS = [
   "gpt-5.1-codex-mini",
 ];
 const WORKFLOW_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
+const PROMPT_REFERENCE_PATTERN = /^@use\s+([a-zA-Z0-9_-]+)\s*$/;
+
+const parsePromptReference = (content: string): string | null => {
+  const matched = content.trim().match(PROMPT_REFERENCE_PATTERN);
+  return matched?.[1] ?? null;
+};
+
+const buildPromptReference = (name: string): string => `@use ${name}`;
 
 const createReviewId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -50,6 +59,9 @@ export function ConfigEditor() {
   const [renameWorkflowName, setRenameWorkflowName] = useState("");
   const [config, setConfig] = useState<SwissConfig>(EMPTY_CONFIG);
   const [prompts, setPrompts] = useState<PromptMap>({});
+  const [promptReuseModes, setPromptReuseModes] = useState<
+    Record<string, PromptReuseMode>
+  >({});
   const [context, setContext] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingConfig, setLoadingConfig] = useState(false);
@@ -79,10 +91,12 @@ export function ConfigEditor() {
         setWorkflows(loadedWorkflows);
         setSelectedWorkflow("");
         setPrompts(loadedPrompts);
+        setPromptReuseModes({});
       } catch {
         if (!canceled) {
           setConfig(EMPTY_CONFIG);
           setPrompts({});
+          setPromptReuseModes({});
         }
       } finally {
         if (!canceled) setLoading(false);
@@ -124,10 +138,12 @@ export function ConfigEditor() {
             parallel: review.parallel ?? false,
           })),
         });
+        setPromptReuseModes({});
         setContext(contextData.content ?? "");
       } catch {
         if (!canceled) {
           setConfig(EMPTY_CONFIG);
+          setPromptReuseModes({});
           setContext("");
         }
       } finally {
@@ -144,6 +160,10 @@ export function ConfigEditor() {
   }, [selectedWorkflow]);
 
   const reviewCount = config.reviews.length;
+  const availablePromptNames = useMemo(
+    () => Object.keys(prompts).sort((a, b) => a.localeCompare(b)),
+    [prompts]
+  );
 
   const hasInvalid = useMemo(() => {
     if (!config.model.trim()) return true;
@@ -296,10 +316,20 @@ export function ConfigEditor() {
   };
 
   const removeReview = (index: number) => {
-    setConfig((prev) => ({
-      ...prev,
-      reviews: prev.reviews.filter((_, idx) => idx !== index),
-    }));
+    setConfig((prev) => {
+      const removed = prev.reviews[index];
+      if (!removed) return prev;
+      setPromptReuseModes((current) => {
+        if (!current[removed.uid]) return current;
+        const next = { ...current };
+        delete next[removed.uid];
+        return next;
+      });
+      return {
+        ...prev,
+        reviews: prev.reviews.filter((_, idx) => idx !== index),
+      };
+    });
   };
 
   const moveReview = (from: number, to: number) => {
@@ -344,7 +374,57 @@ export function ConfigEditor() {
   };
 
   const updatePrompt = (name: string, content: string) => {
+    if (!name) return;
     setPrompts((prev) => ({ ...prev, [name]: content }));
+  };
+
+  const getPromptReuseMode = (reviewUid: string): PromptReuseMode =>
+    promptReuseModes[reviewUid] ?? "reference";
+
+  const updatePromptReuseMode = (reviewUid: string, mode: PromptReuseMode) => {
+    setPromptReuseModes((prev) => ({ ...prev, [reviewUid]: mode }));
+  };
+
+  const applyPromptReuse = (review: ReviewConfig, sourcePromptName: string) => {
+    if (!review.name) {
+      setMessage("先にレビュー名を入力してください");
+      return;
+    }
+    if (!sourcePromptName) {
+      setMessage("再利用元 prompt を選択してください");
+      return;
+    }
+    if (sourcePromptName === review.name && getPromptReuseMode(review.uid) === "reference") {
+      setMessage("同じ名前の prompt を参照リンクにはできません");
+      return;
+    }
+
+    const sourceContent = prompts[sourcePromptName];
+    if (sourceContent === undefined) {
+      setMessage(`prompt '${sourcePromptName}' が見つかりません`);
+      return;
+    }
+
+    const nextContent =
+      getPromptReuseMode(review.uid) === "reference"
+        ? buildPromptReference(sourcePromptName)
+        : sourceContent;
+    const currentContent = prompts[review.name] ?? "";
+    if (
+      currentContent.trim() &&
+      currentContent !== nextContent &&
+      typeof window !== "undefined" &&
+      !window.confirm("現在のプロンプト内容を置き換えます。よろしいですか？")
+    ) {
+      return;
+    }
+
+    updatePrompt(review.name, nextContent);
+    setMessage(
+      getPromptReuseMode(review.uid) === "reference"
+        ? `prompt '${review.name}' は '${sourcePromptName}' を参照するように設定しました`
+        : `prompt '${sourcePromptName}' の内容を '${review.name}' にコピーしました`
+    );
   };
 
   return (
@@ -502,6 +582,11 @@ export function ConfigEditor() {
 
             <div className="space-y-4">
               {config.reviews.map((review, index) => (
+                (() => {
+                  const promptContent = review.name ? prompts[review.name] ?? "" : "";
+                  const linkedPromptName = parsePromptReference(promptContent);
+                  const isPromptLinked = Boolean(linkedPromptName);
+                  return (
                 <div
                   key={review.uid}
                   className="rounded-xl border border-slate-800 bg-slate-950 p-4"
@@ -607,17 +692,72 @@ export function ConfigEditor() {
                         {review.name ? `${review.name}.md` : "レビュー名を入力してください"}
                       </span>
                     </div>
+                    <div className="grid gap-2 lg:grid-cols-[1fr_auto_auto]">
+                      <select
+                        className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                        defaultValue=""
+                        onChange={(event) => {
+                          const sourcePromptName = event.target.value;
+                          if (!sourcePromptName) return;
+                          applyPromptReuse(review, sourcePromptName);
+                          event.target.value = "";
+                        }}
+                        disabled={!review.name || availablePromptNames.length === 0}
+                      >
+                        <option value="">既存 prompt から選択</option>
+                        {availablePromptNames
+                          .filter((name) => name !== review.name)
+                          .map((promptName) => (
+                            <option key={promptName} value={promptName}>
+                              {promptName}
+                            </option>
+                          ))}
+                      </select>
+                      <select
+                        className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                        value={getPromptReuseMode(review.uid)}
+                        onChange={(event) =>
+                          updatePromptReuseMode(
+                            review.uid,
+                            event.target.value as PromptReuseMode
+                          )
+                        }
+                      >
+                        <option value="reference">参照リンク</option>
+                        <option value="copy">内容をコピー</option>
+                      </select>
+                      {isPromptLinked && linkedPromptName ? (
+                        <button
+                          className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-200"
+                          type="button"
+                          onClick={() =>
+                            updatePrompt(review.name, prompts[linkedPromptName] ?? "")
+                          }
+                        >
+                          リンク解除して編集
+                        </button>
+                      ) : (
+                        <div />
+                      )}
+                    </div>
+                    {isPromptLinked && linkedPromptName && (
+                      <p className="text-xs text-amber-300">
+                        この prompt は "{linkedPromptName}" を参照しています（直接編集は無効）。
+                      </p>
+                    )}
                     <textarea
                       className="min-h-[160px] w-full resize-y rounded-lg border border-slate-800 bg-slate-900 p-3 font-mono text-sm"
                       placeholder="レビュー用プロンプトを入力"
-                      value={review.name ? prompts[review.name] ?? "" : ""}
+                      value={promptContent}
                       onChange={(event) =>
                         updatePrompt(review.name, event.target.value)
                       }
-                      disabled={!review.name}
+                      disabled={!review.name || isPromptLinked}
                     />
                   </div>
                 </div>
+                  );
+                })()
               ))}
             </div>
           </div>

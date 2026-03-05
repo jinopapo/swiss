@@ -18,6 +18,7 @@ program
   .argument("<workflows...>", "workflow名")
   .option("--text", "textレビュー")
   .option("--diff", "diffレビュー")
+  .option("--skip <reviewName>", "指定したreview名をスキップ（複数指定可）", collectStringOption, [])
   .description("レビューを実行")
   .action(async (workflows: string[], options) => {
     const workflowNames = workflows.map((workflow) => workflow.trim());
@@ -28,6 +29,7 @@ program
     }
 
     const isDiffMode = Boolean(options.diff);
+    const skipReviews = normalizeSkipReviewNames(options.skip);
     const content = await readStdin();
     if (!content.trim()) {
       if (isDiffMode) {
@@ -64,12 +66,20 @@ program
           config: workflow.config,
           input,
           context: workflow.context,
+          skipReviews,
           onProgress: (event) => {
             const globalIndex = finishedReviews + event.index;
             const total = totalReviews > 0 ? totalReviews : event.total;
             if (event.type === "review_started") {
               console.error(
                 `▶ [${globalIndex}/${total}] レビュー実行中: ${event.name} (workflow: ${workflow.name}, model: ${event.model})`
+              );
+              return;
+            }
+
+            if (event.type === "review_skipped") {
+              console.error(
+                `⏭ [${globalIndex}/${total}] スキップ: ${event.name} (workflow: ${workflow.name}, model: ${event.model})`
               );
               return;
             }
@@ -156,8 +166,22 @@ function generateFishCompletion(): string {
     "complete -c swiss -n '__fish_seen_subcommand_from review' -a '(for f in .swiss/flows/*.yaml; test -e \"$f\"; and basename \"$f\" .yaml; end)' -d 'workflow名'",
     "complete -c swiss -n '__fish_seen_subcommand_from review' -l text -d 'textレビュー'",
     "complete -c swiss -n '__fish_seen_subcommand_from review' -l diff -d 'diffレビュー'",
+    "complete -c swiss -n '__fish_seen_subcommand_from review' -l skip -d '指定したreview名をスキップ（複数指定可）'",
     "complete -c swiss -n '__fish_seen_subcommand_from completion' -a fish",
   ].join("\n");
+}
+
+function collectStringOption(value: string, previous: string[]): string[] {
+  previous.push(value);
+  return previous;
+}
+
+function normalizeSkipReviewNames(skip: unknown): string[] {
+  if (!Array.isArray(skip)) {
+    return [];
+  }
+
+  return skip.map((value) => String(value).trim()).filter(Boolean);
 }
 
 function isWorkflowConfigNotFoundError(error: unknown, workflow: string): boolean {

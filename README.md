@@ -34,10 +34,13 @@ npm install -g .
 cat doc.md | swiss review example1 --text
 git diff | swiss review example2 --diff
 git diff | swiss review example1 example2 --diff
+git diff | swiss review example1 example2 --diff --skip doc-review --skip security
 ```
 
 `--diff` は、stdin が空のときに「差分なし」としてスキップするための実行オプションです。
 `--text` は明示用オプションですが、レビュー内容の解釈自体は `.swiss/contexts/<workflow>.md` に依存します。
+`--skip <reviewName>` は、`reviews[].name` が一致する review を実行時にスキップします（複数指定可）。
+複数 workflow を指定した場合でも、review 名一致で全 workflow に適用されます。
 
 `swiss review` は **workflow 名の指定が必須** です（`swiss review <workflow...>`）。
 指定した workflow に対応する `.swiss/flows/<workflow>.yaml` が存在しない場合はエラーになります。
@@ -50,6 +53,7 @@ git diff | swiss review example1 example2 --diff
 - 各 workflow ごとに `.swiss/contexts/<workflow>.md` を読み込みます（未作成/空の場合はエラー）
 - 各 workflow の `reviews` を**上から順番に逐次実行**し、workflow は **左から順に連結実行**されます
 - 各レビューは `.swiss/prompts/{review_name}.md` の内容（レビュー観点）を使って実行します
+- `--skip <reviewName>` で指定された review は実行せず、進捗ログに `スキップ` と表示されます
 - 入力（stdin）の意味づけ（例: git diff / 仕様テキスト）は `.swiss/contexts/<workflow>.md` に記述します
 - `core/prompts` の built-in テンプレートは廃止され、入力解釈は workflow context 側で行います
 - `line` は 0 以上の整数です（`0` はファイル全体への指摘を表す場合があります）

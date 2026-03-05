@@ -57,6 +57,7 @@ type ReviewRunnerOptions = {
   config: SwissConfig;
   input: ReviewInput;
   context?: string;
+  skipReviews?: string[];
   onProgress?: (event: ReviewProgressEvent) => void;
 };
 
@@ -75,6 +76,13 @@ type ReviewProgressEvent =
       name: string;
       elapsedMs: number;
       flaggedCount: number;
+    }
+  | {
+      type: "review_skipped";
+      index: number;
+      total: number;
+      name: string;
+      model: string;
     };
 
 export async function runReviews(
@@ -83,10 +91,23 @@ export async function runReviews(
   const codex = new Codex({ apiKey: process.env.OPENAI_API_KEY });
   const results: ReviewResult[] = [];
   const total = opts.config.reviews.length;
+  const skipReviews = new Set((opts.skipReviews ?? []).map((name) => name.trim()).filter(Boolean));
 
   for (const [index, review] of opts.config.reviews.entries()) {
     const reviewIndex = index + 1;
     const model = review.model ?? opts.config.model;
+
+    if (skipReviews.has(review.name)) {
+      opts.onProgress?.({
+        type: "review_skipped",
+        index: reviewIndex,
+        total,
+        name: review.name,
+        model,
+      });
+      continue;
+    }
+
     opts.onProgress?.({
       type: "review_started",
       index: reviewIndex,

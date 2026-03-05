@@ -21,6 +21,12 @@ const workflowNameSchema = z
   .min(1)
   .regex(/^[a-zA-Z0-9_-]+$/, "workflow名は英数字・ハイフン・アンダースコアのみ使用できます");
 
+const promptNameSchema = z
+  .string()
+  .min(1)
+  .regex(/^[a-zA-Z0-9_-]+$/, "prompt名は英数字・ハイフン・アンダースコアのみ使用できます");
+const promptReferencePattern = /^@use\s+([a-zA-Z0-9_-]+)\s*$/;
+
 function flowsDir(baseDir: string): string {
   return path.join(baseDir, ".swiss", "flows");
 }
@@ -58,8 +64,45 @@ export async function listWorkflows(baseDir: string): Promise<string[]> {
 }
 
 export async function loadPrompt(baseDir: string, name: string): Promise<string> {
-  const promptPath = path.join(baseDir, ".swiss", "prompts", `${name}.md`);
-  return fs.readFile(promptPath, "utf8");
+  return resolvePrompt(baseDir, promptNameSchema.parse(name), []);
+}
+
+async function resolvePrompt(
+  baseDir: string,
+  promptName: string,
+  chain: string[]
+): Promise<string> {
+  if (chain.includes(promptName)) {
+    const loop = [...chain, promptName].join(" -> ");
+    throw new Error(`prompt 参照が循環しています: ${loop}`);
+  }
+
+  const nextChain = [...chain, promptName];
+  const promptPath = path.join(baseDir, ".swiss", "prompts", `${promptName}.md`);
+
+  let content: string;
+  try {
+    content = await fs.readFile(promptPath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new Error(`promptファイルが見つかりません: .swiss/prompts/${promptName}.md`);
+    }
+    throw error;
+  }
+
+  const target = parsePromptReference(content);
+  if (!target) {
+    return content;
+  }
+
+  const normalizedTarget = promptNameSchema.parse(target);
+  return resolvePrompt(baseDir, normalizedTarget, nextChain);
+}
+
+function parsePromptReference(content: string): string | null {
+  const trimmed = content.trim();
+  const matched = trimmed.match(promptReferencePattern);
+  return matched?.[1] ?? null;
 }
 
 export async function loadWorkflowContext(baseDir: string, workflowName: string): Promise<string> {
