@@ -1,26 +1,72 @@
 import { Codex } from "@openai/codex-sdk";
 import { z } from "zod";
-import type { ReviewInput, ReviewResult, ReviewSpec, SwissConfig } from "./types.js";
+import type {
+  ReviewInput,
+  ReviewItem,
+  ReviewResult,
+  ReviewSpec,
+  ScoredReviewItem,
+  SwissConfig,
+} from "./types.js";
 import { loadPrompt } from "./config.js";
 
 const reviewItemSchema = z.object({
   review: z.string(),
-  score: z.number().int().min(0).max(10),
   filePath: z.string(),
   line: z.number().int().min(0),
 });
 
-const reviewResultSchema = z.object({
+const scoredReviewItemSchema = reviewItemSchema.extend({
+  score: z.number().int().min(0).max(10),
+});
+
+const generatedReviewResultSchema = z.object({
   results: z.array(reviewItemSchema),
 });
 
-const jsonSchema = {
+const scoredReviewResultSchema = z.object({
+  results: z.array(scoredReviewItemSchema),
+});
+
+const reviewItemsJsonSchema = {
   type: "object",
-  description: "レビュー結果。ファイルと行番号ごとにスコアとレビュー内容を含む。",
+  description: "レビュー指摘の候補一覧。ファイルと行番号ごとに指摘内容を含む。",
   properties: {
     results: {
       type: "array",
-      description: "レビュー結果の配列。",
+      description: "レビュー指摘の配列。",
+      items: {
+        type: "object",
+        properties: {
+          filePath: {
+            type: "string",
+            description: "レビュー対象のファイルパス。",
+          },
+          line: {
+            type: "integer",
+            description: "レビュー対象の行番号。",
+          },
+          review: {
+            type: "string",
+            description: "レビュー内容。修正に必要な指摘を含む必要がある",
+          },
+        },
+        required: ["review", "filePath", "line"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["results"],
+  additionalProperties: false,
+} as const;
+
+const scoredReviewItemsJsonSchema = {
+  type: "object",
+  description: "レビュー指摘のスコアリング結果。ファイルと行番号ごとにスコアとレビュー内容を含む。",
+  properties: {
+    results: {
+      type: "array",
+      description: "スコア付きレビュー結果の配列。",
       items: {
         type: "object",
         properties: {
@@ -117,14 +163,10 @@ export async function runReviews(
     });
 
     const startedAt = Date.now();
-    const thread = codex.startThread({
-      workingDirectory: opts.baseDir,
-      skipGitRepoCheck: true,
-      model,
-    });
     const result = await runSingleReview({
-      thread,
+      codex,
       baseDir: opts.baseDir,
+      model,
       input: opts.input,
       review,
       context: opts.context,
@@ -149,52 +191,120 @@ export async function runReviews(
 }
 
 async function runSingleReview(args: {
-  thread: ReturnType<Codex["startThread"]>;
+  codex: Codex;
   baseDir: string;
+  model: string;
   input: ReviewInput;
   review: ReviewSpec;
   context?: string;
 }): Promise<ReviewResult[]> {
   const userPrompt = await loadPrompt(args.baseDir, args.review.name);
-  const message = buildMessage({
+  const generatedItems = await generateReviewItems({
+    codex: args.codex,
+    baseDir: args.baseDir,
+    model: args.model,
     context: args.context,
     userPrompt,
     input: args.input,
   });
 
-  const turn = await args.thread.run(message, {
-    outputSchema: jsonSchema,
+  const scoredItems = await scoreReviewItems({
+    codex: args.codex,
+    baseDir: args.baseDir,
+    model: args.model,
+    input: args.input,
+    userPrompt,
+    items: generatedItems,
+  });
+
+  return filterFlaggedReviewItems(scoredItems).map((item) => ({
+    name: args.review.name,
+    review: item.review,
+    score: item.score,
+    filePath: item.filePath,
+    line: item.line,
+  }));
+}
+
+async function generateReviewItems(args: {
+  codex: Codex;
+  baseDir: string;
+  model: string;
+  context?: string;
+  userPrompt: string;
+  input: ReviewInput;
+}): Promise<ReviewItem[]> {
+  const thread = args.codex.startThread({
+    workingDirectory: args.baseDir,
+    skipGitRepoCheck: true,
+    model: args.model,
+  });
+  const message = buildReviewGenerationMessage({
+    context: args.context,
+    userPrompt: args.userPrompt,
+    input: args.input,
+  });
+
+  const turn = await thread.run(message, {
+    outputSchema: reviewItemsJsonSchema,
   });
 
   const rawParsed = JSON.parse(turn.finalResponse);
   const normalized = Array.isArray(rawParsed) ? { results: rawParsed } : rawParsed;
-  const parsed = reviewResultSchema.parse(normalized);
-  return parsed.results
-    .filter((item) => isFlaggedScore(item.score))
-    .map((item) => ({
-      name: args.review.name,
-      review: item.review,
-      score: item.score,
-      filePath: item.filePath,
-      line: item.line,
-    }));
+  const parsed = generatedReviewResultSchema.parse(normalized);
+  return parsed.results;
+}
+
+async function scoreReviewItems(args: {
+  codex: Codex;
+  baseDir: string;
+  model: string;
+  input: ReviewInput;
+  userPrompt: string;
+  items: ReviewItem[];
+}): Promise<ScoredReviewItem[]> {
+  if (args.items.length === 0) {
+    return [];
+  }
+
+  const thread = args.codex.startThread({
+    workingDirectory: args.baseDir,
+    skipGitRepoCheck: true,
+    model: args.model,
+  });
+  const message = buildScoringMessage({
+    input: args.input,
+    userPrompt: args.userPrompt,
+    items: args.items,
+  });
+
+  const turn = await thread.run(message, {
+    outputSchema: scoredReviewItemsJsonSchema,
+  });
+
+  const rawParsed = JSON.parse(turn.finalResponse);
+  const normalized = Array.isArray(rawParsed) ? { results: rawParsed } : rawParsed;
+  const parsed = scoredReviewResultSchema.parse(normalized);
+  return parsed.results;
+}
+
+function filterFlaggedReviewItems(items: ScoredReviewItem[]): ScoredReviewItem[] {
+  return items.filter((item) => isFlaggedScore(item.score));
 }
 
 function isFlaggedScore(score: number): boolean {
   return score >= 7;
 }
 
-function buildMessage(args: {
+function buildReviewGenerationMessage(args: {
   context?: string;
   userPrompt: string;
   input: ReviewInput;
 }): string {
   const trimmedContext = args.context?.trim() ?? "";
   return [
-    "スコアリングルールとレビュー基準に基づいて、入力内容をレビューしてください。",
-    "\n",
-    "# スコアリングルール",
-    "7超えは要対応。0は全く問題なし、10は完全に問題ありを意味する。",
+    "レビュー基準に基づいて、入力内容から修正が必要な指摘候補を洗い出してください。",
+    "スコアは付けず、指摘内容のみをJSONで返してください。問題がなければ results を空配列にしてください。",
     "\n---\n",
     trimmedContext ? "# 前提条件" : "",
     trimmedContext,
@@ -209,4 +319,31 @@ function buildMessage(args: {
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function buildScoringMessage(args: {
+  input: ReviewInput;
+  userPrompt: string;
+  items: ReviewItem[];
+}): string {
+  return [
+    "与えられたレビュー指摘を1件ずつスコアリングしてください。",
+    "0は的外れもしくは対応不要な細かな指摘、10は的確な指摘を意味します。7以上は要対応です。",
+    "レビュー観点、指摘一覧(JSON)、元の入力内容の3つを根拠に評価してください。",
+    "入力の review / filePath / line は変更せず、そのまま score を追加してJSONで返してください。",
+    "問題がない場合でも、受け取った全件に対して score を付けて返してください。",
+    "\n---\n",
+    "# レビュー観点",
+    args.userPrompt,
+    "\n---\n",
+    "# 元の入力",
+    "```",
+    args.input.content,
+    "```",
+    "\n---\n",
+    "# 指摘一覧(JSON)",
+    "```json",
+    JSON.stringify({ results: args.items }, null, 2),
+    "```",
+  ].join("\n");
 }

@@ -14,10 +14,16 @@ export type ReviewInput = {
   content: string;
 };
 
-export type ReviewResult = {
-  name: string;
+export type ReviewItem = {
   review: string;
-  score: number;
   filePath: string;
   line: number;
+};
+
+export type ScoredReviewItem = ReviewItem & {
+  score: number;
+};
+
+export type ReviewResult = ScoredReviewItem & {
+  name: string;
 };
