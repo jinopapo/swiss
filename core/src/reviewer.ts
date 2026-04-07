@@ -1,10 +1,12 @@
 import { Codex } from "@openai/codex-sdk";
 import { z } from "zod";
 import type {
+  ReviewDebugEntry,
   ReviewInput,
   ReviewItem,
   ReviewResult,
   ReviewSpec,
+  RunReviewsResult,
   ScoredReviewItem,
   SwissConfig,
 } from "./types.js";
@@ -18,6 +20,7 @@ const reviewItemSchema = z.object({
 
 const scoredReviewItemSchema = reviewItemSchema.extend({
   score: z.number().int().min(0).max(10),
+  reason: z.string(),
 });
 
 const generatedReviewResultSchema = z.object({
@@ -88,8 +91,12 @@ const scoredReviewItemsJsonSchema = {
             maximum: 10,
             description: "スコア（0-10）。",
           },
+          reason: {
+            type: "string",
+            description: "そのスコアにした理由。元の入力・レビュー観点・指摘内容をもとに簡潔に説明する。",
+          },
         },
-        required: ["review", "score", "filePath", "line"],
+        required: ["review", "score", "reason", "filePath", "line"],
         additionalProperties: false,
       },
     },
@@ -103,6 +110,7 @@ type ReviewRunnerOptions = {
   config: SwissConfig;
   input: ReviewInput;
   context?: string;
+  debug?: boolean;
   skipReviews?: string[];
   onProgress?: (event: ReviewProgressEvent) => void;
 };
@@ -133,9 +141,11 @@ type ReviewProgressEvent =
 
 export async function runReviews(
   opts: ReviewRunnerOptions
-): Promise<{ results: ReviewResult[]; stopReason: "needs_action" | "completed" }>{
+): Promise<RunReviewsResult> {
   const codex = new Codex({ apiKey: process.env.OPENAI_API_KEY });
   const results: ReviewResult[] = [];
+  const debugEntries: ReviewDebugEntry[] = [];
+  const shouldCollectDebug = opts.debug === true;
   const total = opts.config.reviews.length;
   const skipReviews = new Set((opts.skipReviews ?? []).map((name) => name.trim()).filter(Boolean));
 
@@ -170,6 +180,7 @@ export async function runReviews(
       input: opts.input,
       review,
       context: opts.context,
+      debug: shouldCollectDebug,
     });
 
     opts.onProgress?.({
@@ -178,16 +189,27 @@ export async function runReviews(
       total,
       name: review.name,
       elapsedMs: Date.now() - startedAt,
-      flaggedCount: result.length,
+      flaggedCount: result.results.length,
     });
 
-    results.push(...result);
-    if (result.length > 0) {
-      return { results, stopReason: "needs_action" };
+    results.push(...result.results);
+    if (result.debug) {
+      debugEntries.push(result.debug);
+    }
+    if (result.results.length > 0) {
+      return {
+        results,
+        stopReason: "needs_action",
+        ...(shouldCollectDebug ? { debug: debugEntries } : {}),
+      };
     }
   }
 
-  return { results, stopReason: "completed" };
+  return {
+    results,
+    stopReason: "completed",
+    ...(shouldCollectDebug ? { debug: debugEntries } : {}),
+  };
 }
 
 async function runSingleReview(args: {
@@ -197,7 +219,8 @@ async function runSingleReview(args: {
   input: ReviewInput;
   review: ReviewSpec;
   context?: string;
-}): Promise<ReviewResult[]> {
+  debug?: boolean;
+}): Promise<{ results: ReviewResult[]; debug?: ReviewDebugEntry }> {
   const userPrompt = await loadPrompt(args.baseDir, args.review.name);
   const generatedItems = await generateReviewItems({
     codex: args.codex,
@@ -217,13 +240,27 @@ async function runSingleReview(args: {
     items: generatedItems,
   });
 
-  return filterFlaggedReviewItems(scoredItems).map((item) => ({
-    name: args.review.name,
-    review: item.review,
-    score: item.score,
-    filePath: item.filePath,
-    line: item.line,
-  }));
+  const flaggedItems = filterFlaggedReviewItems(scoredItems);
+
+  return {
+    results: flaggedItems.map((item) => ({
+      name: args.review.name,
+      review: item.review,
+      score: item.score,
+      reason: item.reason,
+      filePath: item.filePath,
+      line: item.line,
+    })),
+    ...(args.debug
+      ? {
+          debug: {
+            name: args.review.name,
+            generatedItems,
+            scoredItems,
+          },
+        }
+      : {}),
+  };
 }
 
 async function generateReviewItems(args: {
@@ -330,7 +367,8 @@ function buildScoringMessage(args: {
     "与えられたレビュー指摘を1件ずつスコアリングしてください。",
     "0は的外れもしくは対応不要な細かな指摘、10は的確な指摘を意味します。7以上は要対応です。",
     "レビュー観点、指摘一覧(JSON)、元の入力内容の3つを根拠に評価してください。",
-    "入力の review / filePath / line は変更せず、そのまま score を追加してJSONで返してください。",
+    "入力の review / filePath / line は変更せず、そのまま score と reason を追加してJSONで返してください。",
+    "reason には、なぜそのスコアにしたのかを各指摘ごとに具体的かつ簡潔に記載してください。",
     "問題がない場合でも、受け取った全件に対して score を付けて返してください。",
     "\n---\n",
     "# レビュー観点",

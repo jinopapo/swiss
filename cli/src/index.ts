@@ -3,7 +3,7 @@ import { Command } from "commander";
 import { listWorkflows, loadWorkflowConfig, loadWorkflowContext, runReviews } from "@swiss/core";
 import { readStdin } from "./stdin.js";
 import { openConfigUi } from "./open-config.js";
-import type { ReviewInput, SwissConfig } from "@swiss/core";
+import type { ReviewDebugEntry, ReviewInput, SwissConfig } from "@swiss/core";
 
 const program = new Command();
 const WORKFLOW_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -18,6 +18,7 @@ program
   .argument("<workflows...>", "workflow名")
   .option("--text", "textレビュー")
   .option("--diff", "diffレビュー")
+  .option("--debug", "review agent と採点AIの中間出力を標準出力する")
   .option("--skip <reviewName>", "指定したreview名をスキップ（複数指定可）", collectStringOption, [])
   .description("レビューを実行")
   .action(async (workflows: string[], options) => {
@@ -29,6 +30,7 @@ program
     }
 
     const isDiffMode = Boolean(options.diff);
+    const isDebugMode = Boolean(options.debug);
     const skipReviews = normalizeSkipReviewNames(options.skip);
     const content = await readStdin();
     if (!content.trim()) {
@@ -61,11 +63,12 @@ program
           throw new Error(`workflow の事前検証に失敗しました: ${workflow.name}`);
         }
 
-        const { results, stopReason } = await runReviews({
+        const { results, stopReason, debug } = await runReviews({
           baseDir,
           config: workflow.config,
           input,
           context: workflow.context,
+          debug: isDebugMode,
           skipReviews,
           onProgress: (event) => {
             const globalIndex = finishedReviews + event.index;
@@ -91,6 +94,10 @@ program
             );
           },
         });
+
+        if (isDebugMode && debug) {
+          console.log(formatDebugOutput(workflow.name, debug));
+        }
 
         for (const result of results) {
           console.log(formatReview(result));
@@ -145,7 +152,14 @@ program
 
 program.parse();
 
-function formatReview(result: { name: string; review: string; score: number; filePath: string; line: number }): string {
+function formatReview(result: {
+  name: string;
+  review: string;
+  score: number;
+  reason: string;
+  filePath: string;
+  line: number;
+}): string {
   const lineLabel = result.line === 0 ? "全体 (0)" : String(result.line);
   return [
     `レビュー: ${result.name}`,
@@ -154,6 +168,21 @@ function formatReview(result: { name: string; review: string; score: number; fil
     `行番号: ${lineLabel}`,
     "内容:",
     result.review,
+  ].join("\n");
+}
+
+function formatDebugOutput(workflowName: string, debugEntries: ReviewDebugEntry[]): string {
+  return [
+    `# DEBUG workflow: ${workflowName}`,
+    JSON.stringify(
+      {
+        workflow: workflowName,
+        reviews: debugEntries,
+      },
+      null,
+      2
+    ),
+    "---",
   ].join("\n");
 }
 
@@ -166,6 +195,7 @@ function generateFishCompletion(): string {
     "complete -c swiss -n '__fish_seen_subcommand_from review' -a '(for f in .swiss/flows/*.yaml; test -e \"$f\"; and basename \"$f\" .yaml; end)' -d 'workflow名'",
     "complete -c swiss -n '__fish_seen_subcommand_from review' -l text -d 'textレビュー'",
     "complete -c swiss -n '__fish_seen_subcommand_from review' -l diff -d 'diffレビュー'",
+    "complete -c swiss -n '__fish_seen_subcommand_from review' -l debug -d 'review agent と採点AIの中間出力を標準出力する'",
     "complete -c swiss -n '__fish_seen_subcommand_from review' -l skip -d '指定したreview名をスキップ（複数指定可）'",
     "complete -c swiss -n '__fish_seen_subcommand_from completion' -a fish",
   ].join("\n");

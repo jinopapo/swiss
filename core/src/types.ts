@@ -22,8 +22,21 @@ export type ReviewItem = {
 
 export type ScoredReviewItem = ReviewItem & {
   score: number;
+  reason: string;
 };
 
 export type ReviewResult = ScoredReviewItem & {
   name: string;
+};
+
+export type ReviewDebugEntry = {
+  name: string;
+  generatedItems: ReviewItem[];
+  scoredItems: ScoredReviewItem[];
+};
+
+export type RunReviewsResult = {
+  results: ReviewResult[];
+  stopReason: "needs_action" | "completed";
+  debug?: ReviewDebugEntry[];
 };
