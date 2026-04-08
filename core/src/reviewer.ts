@@ -151,7 +151,7 @@ export async function runReviews(
 
   for (const [index, review] of opts.config.reviews.entries()) {
     const reviewIndex = index + 1;
-    const model = review.model ?? opts.config.model;
+    const model = review.model?.trim() ? review.model : opts.config.model;
 
     if (skipReviews.has(review.name)) {
       opts.onProgress?.({
