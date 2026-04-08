@@ -17,10 +17,15 @@ const modelSchema = z.enum(allowedModels, {
   }),
 });
 
+const optionalModelSchema = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  modelSchema.optional()
+);
+
 const reviewSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
-  model: modelSchema.optional(),
+  model: optionalModelSchema,
   parallel: z.boolean().optional(),
 });
 
