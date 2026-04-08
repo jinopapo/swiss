@@ -32,6 +32,13 @@ reviews:
 ### model（必須）
 デフォルトで使用するモデルを指定します。
 
+利用可能なモデルは次の4つです。
+
+- `gpt-5.4`
+- `gpt-5.4-mini`
+- `gpt-5.3-codex`
+- `gpt-5.2`
+
 ### reviews（必須）
 ワークフロー内の各レビューを上から順に定義します（1件以上）。
 
@@ -46,21 +53,21 @@ reviews:
 
 ### 例（最小）
 ```yaml
-model: gpt-5
+model: gpt-5.4
 reviews:
   - name: quality
 ```
 
 ### 例（複数レビュー + レビューごとの model 上書き）
 ```yaml
-model: gpt-5
+model: gpt-5.4
 reviews:
   - name: quality
     description: コード品質レビュー
     parallel: false
   - name: security
     description: セキュリティレビュー
-    model: gpt-5
+    model: gpt-5.3-codex
     parallel: true
 ```
 

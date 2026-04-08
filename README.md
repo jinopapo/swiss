@@ -106,7 +106,7 @@ swiss completion fish > ~/.config/fish/completions/swiss.fish
 
 `.swiss/flows/default.yaml`
 ```yaml
-model: gpt-5.2
+model: gpt-5.4
 reviews:
   - name: quality
     description: コード品質レビュー

@@ -4,15 +4,28 @@ import YAML from "yaml";
 import { z } from "zod";
 import type { SwissConfig } from "./types.js";
 
+const allowedModels = [
+  "gpt-5.4",
+  "gpt-5.4-mini",
+  "gpt-5.3-codex",
+  "gpt-5.2",
+] as const;
+
+const modelSchema = z.enum(allowedModels, {
+  errorMap: () => ({
+    message: `model は次のいずれかを指定してください: ${allowedModels.join(", ")}`,
+  }),
+});
+
 const reviewSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
-  model: z.string().optional(),
+  model: modelSchema.optional(),
   parallel: z.boolean().optional(),
 });
 
 const configSchema = z.object({
-  model: z.string().min(1),
+  model: modelSchema,
   reviews: z.array(reviewSchema).min(1),
 });
 

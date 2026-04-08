@@ -19,10 +19,10 @@ type PromptMap = Record<string, string>;
 type PromptReuseMode = "reference" | "copy";
 
 const MODEL_OPTIONS = [
+  "gpt-5.4",
+  "gpt-5.4-mini",
+  "gpt-5.3-codex",
   "gpt-5.2",
-  "gpt-5.1-codex-max",
-  "gpt-5.2-codex",
-  "gpt-5.1-codex-mini",
 ];
 const WORKFLOW_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const PROMPT_REFERENCE_PATTERN = /^@use\s+([a-zA-Z0-9_-]+)\s*$/;
